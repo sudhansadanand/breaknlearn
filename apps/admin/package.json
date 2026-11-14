@@ -22,7 +22,9 @@
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "zod": "3.25.76",
-    "@bnl/db": "workspace:*"
+    "@bnl/db": "workspace:*",
+    "@bnl/curriculum": "workspace:*",
+    "@bnl/storage": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "19.1.12",
