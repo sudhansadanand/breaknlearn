@@ -130,6 +130,10 @@ export function fakeCurriculumRepo(env: TestEnv, cs: CurriculumStore): Curriculu
     async sourceDocumentExists(_sql, id) {
       return cs.sourceDocs.includes(id);
     },
+    async listSourceDocuments(sql) {
+      requireKind(sql, ["staff"]);
+      return cs.sourceDocs.map((id) => ({ id, title: "SYNTHETIC source", versionLabel: "2016" }));
+    },
     async subjectAuthority(_sql, grade, subjectKey) {
       return cs.gradeSubjects.find((g) => g.grade === grade && g.subjectKey === subjectKey)?.authority ?? null;
     },

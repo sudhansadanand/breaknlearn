@@ -427,3 +427,13 @@ describe("POST /admin/imports/{jobId}/review", () => {
     expect(env.cs.mappings).toEqual(before);
   });
 });
+
+describe("SEC-001: curriculum/import pages verify the session server-side", () => {
+  it.each(["curriculum/page.tsx", "imports/page.tsx", "imports/[jobId]/page.tsx"])("%s calls requireAdultPage()", async (f) => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL(`../../src/app/admin/(portal)/${f}`, import.meta.url), "utf8");
+    expect(src).toMatch(/await requireAdultPage\(\)/);
+    // The guard runs before any data is loaded.
+    expect(src.indexOf("await requireAdultPage()")).toBeLessThan(src.search(/load(ForHousehold|Curriculum)\(/));
+  });
+});

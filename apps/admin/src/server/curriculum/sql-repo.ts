@@ -67,6 +67,10 @@ export const sqlCurriculumRepo: CurriculumRepo = {
     const rows = await sql`select 1 from bnl.source_documents where id = ${id}`;
     return rows.length > 0;
   },
+  async listSourceDocuments(sql) {
+    return sql<{ id: string; title: string; versionLabel: string | null }[]>`
+      select id, title, version_label as "versionLabel" from bnl.source_documents order by title, version_label limit 200`;
+  },
   async subjectAuthority(sql, grade, subjectKey) {
     const [r] = await sql<{ authority: string }[]>`select authority from bnl.grade_subjects where grade = ${grade} and subject_key = ${subjectKey}`;
     return r?.authority ?? null;

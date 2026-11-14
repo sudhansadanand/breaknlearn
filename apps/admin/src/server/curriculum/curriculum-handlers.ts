@@ -77,6 +77,8 @@ export interface CurriculumView {
   readonly nodes: ReturnType<typeof toApiNode>[];
   readonly nextCursor: string | null;
   readonly staffRoles: readonly StaffRole[];
+  /** Only for reviewers (to cite a source when verifying). */
+  readonly sourceDocuments: readonly { id: string; title: string; versionLabel: string | null }[];
 }
 
 /**
@@ -94,11 +96,13 @@ export async function loadCurriculum(c: Ctx, adult: AdultIdentity, q: Curriculum
     limit: q.limit + 1,
   };
   const staffRoles = await c.deps.db({ kind: "adult", userId: adult.userId }, (sql) => c.deps.repos.memberships.activeStaffRoles(sql, adult.userId));
-  const run = (sql: Sql) => deps.repo.listNodes(sql, filter);
-  const rows = staffRoles.length > 0 ? await withStaff(c, adult, StaffRole.options, run) : await withAdultHousehold(c, adult, run);
+  const [rows, sourceDocuments] =
+    staffRoles.length > 0
+      ? await withStaff(c, adult, StaffRole.options, async (sql, held) => [await deps.repo.listNodes(sql, filter), held.includes("reviewer") ? await deps.repo.listSourceDocuments(sql) : []] as const)
+      : [await withAdultHousehold(c, adult, (sql: Sql) => deps.repo.listNodes(sql, filter)), []];
   const page = rows.slice(0, q.limit);
   const last = page.at(-1);
-  return { nodes: page.map(toApiNode), nextCursor: rows.length > q.limit && last ? encodeCursor(last) : null, staffRoles };
+  return { nodes: page.map(toApiNode), nextCursor: rows.length > q.limit && last ? encodeCursor(last) : null, staffRoles, sourceDocuments };
 }
 
 /** GET /api/v1/admin/curriculum */

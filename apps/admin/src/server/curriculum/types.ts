@@ -190,6 +190,8 @@ export interface CurriculumRepo {
   /** Auth id of the most recent `curriculum.node_submitted` audit row for this node, if any. */
   lastSubmitter(sql: Sql, nodeId: string): Promise<string | null>;
   sourceDocumentExists(sql: Sql, id: string): Promise<boolean>;
+  /** Staff only: citable source documents (id, title, version). */
+  listSourceDocuments(sql: Sql): Promise<{ id: string; title: string; versionLabel: string | null }[]>;
   /** grade_subjects.authority for the node's subject ('cisce' | 'local_enrichment'). */
   subjectAuthority(sql: Sql, grade: number, subjectKey: string): Promise<string | null>;
   updateNodeReview(sql: Sql, u: NodeReviewUpdate): Promise<NodeRow>;
