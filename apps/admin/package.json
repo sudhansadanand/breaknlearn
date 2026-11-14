@@ -20,6 +20,7 @@
     "@bnl/contracts": "workspace:*",
     "@bnl/curriculum": "workspace:*",
     "@bnl/db": "workspace:*",
+    "@bnl/intelligence": "workspace:*",
     "@bnl/lesson-engine": "workspace:*",
     "@bnl/storage": "workspace:*",
     "@bnl/student-progress": "workspace:*",

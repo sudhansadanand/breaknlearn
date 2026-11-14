@@ -12,7 +12,7 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API (+ pure engines: lesson-engine, telemetry, student-progress, intelligence) | ✅ ready for review (catalog API behind `FEATURE_CATALOG_API`) | `p2/content-pipeline` |
 | P3 | Student runtime: catalog consumer, offline cache, legacy import | ✅ ready for review (paired mode off unless `FEATURE_STUDENT_PAIRED`) | `p3/student-app` |
 | P4 | Telemetry queue/ingest, progress sync, assessments | ✅ ready for review (flags `FEATURE_TELEMETRY`, `FEATURE_ASSESSMENTS` off) | `p4/telemetry-sync` |
-| P5 | ELS engine, parent analytics, recommendations | ○ | — |
+| P5 | ELS engine, parent analytics, recommendations | ✅ ready for review | `p5/analytics-int` |
 | P6 | E2E, security review, runbooks, LG test plan | ○ | — |
 | P7 | Owner-gated production rollout | ⛔ needs written owner approval | — |
 
@@ -73,6 +73,17 @@ P4 defaults needing owner sign-off: review ladder 3→7→14→30 days (first ch
 | unit | `pnpm test` | student 42, admin 205 |
 
 Not verifiable here: physical LG webOS (TV-006): service worker support, Back key 461, audio autoplay.
+
+## P5 gate evidence (2026-11-14)
+
+| Gate | Command | Result |
+|---|---|---|
+| formula_fixtures, missing_retention_not_zero, no_time_in_ELS | `pnpm --filter @bnl/intelligence test` | 46/46 (incl. renormalization edges, time-invariance) |
+| dashboard/API auth, cross-household | `pnpm test` (admin 242; SEC-001 auto-covers 4 new routes) | pass |
+| RLS, scoring idempotency, purge | `pnpm test:integration` (migrations 0001–0007) | db 44/44, admin 70/70 |
+| everything else | build, test:served, test:e2e | pass, 30/30 |
+
+Not built yet: `GET /admin/analytics/content-quality` (editor report, falls through to 401/404); time per subject (sessions not stored per lesson). Jobs to schedule at deploy: `aggregate-sessions.mjs` → `score-learners.mjs` nightly, `score-retention-purge.mjs` daily (`BNL_JOB_DB_URL`).
 
 ## Owner inputs (spec §14)
 

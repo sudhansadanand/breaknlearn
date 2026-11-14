@@ -47,6 +47,9 @@ importers:
       '@bnl/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bnl/intelligence':
+        specifier: workspace:*
+        version: link:../../packages/intelligence
       '@bnl/lesson-engine':
         specifier: workspace:*
         version: link:../../packages/lesson-engine
