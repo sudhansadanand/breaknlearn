@@ -63,6 +63,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/student-progress:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/telemetry:
     dependencies:
       '@bnl/contracts':
