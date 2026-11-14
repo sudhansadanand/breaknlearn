@@ -1,0 +1,36 @@
+{
+  "_comment": "Synthetic example of breaknlearn.profiles.v1 as written by the live app (save()/saveProfile()). Not real child data.",
+  "breaknlearn.profiles.v1": {
+    "profiles": [
+      {
+        "id": "child-1",
+        "name": "Asha",
+        "grade": 2,
+        "avatar": "🦊",
+        "lessons": {
+          "times-1:puppy": { "topicId": "multiplication-1", "table": 1, "slideId": "step-10", "position": 0, "complete": true, "updatedAt": 1762900000000 },
+          "times-3:candy": { "topicId": "multiplication-3", "table": 3, "slideId": "step-4", "position": 3.2, "complete": false, "updatedAt": 1762990000000 },
+          "farm": { "slideId": "three-6", "position": 2, "complete": false, "updatedAt": 1762000000000 }
+        },
+        "lastWorld": "candy",
+        "lastTable": 3,
+        "musicEnabled": true
+      },
+      {
+        "id": "child-2",
+        "name": "Ravi",
+        "grade": 6,
+        "avatar": "🧑‍🚀",
+        "lessons": {
+          "times-3:unicorn": { "topicId": "multiplication-3", "table": 3, "slideId": "step-7", "position": 6.9, "complete": false, "updatedAt": 1762995000000 }
+        },
+        "lastWorld": "unicorn",
+        "lastTable": 3,
+        "musicEnabled": false
+      }
+    ],
+    "activeId": "child-2"
+  },
+  "breaknlearn.progress.v1": null,
+  "learnbreak-x3-v4-progress": null
+}

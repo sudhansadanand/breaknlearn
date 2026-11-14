@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: BreakNLearn API v1 (implementation contract)
+  version: 1.0.0
+  description: >-
+    Agent handoff interface. Endpoints must require server-side scope checks;
+    see master spec. APIs may evolve additively with contract tests.
+servers:
+  - url: https://breaknlearn.vercel.app/api/v1
+security: []
+tags:
+  - name: Pairing
+  - name: Content
+  - name: Learners
+  - name: Telemetry
+  - name: Assessments
+  - name: Admin
+components:
+  responses:
+    ErrorResponse:
+      description: Request rejected
+      content: {application/json: {schema: {type: object, required: [error], properties: {error: {type: object, required: [code, message, request_id], properties: {code: {type: string}, message: {type: string}, request_id: {type: string}}}}}}}
+
+  securitySchemes:
+    DeviceToken: {type: http, scheme: bearer, bearerFormat: JWT}
+    AdultSession: {type: apiKey, in: cookie, name: bnl_admin_session}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}
+            details: {type: object, additionalProperties: true}
+    UUID: {type: string, format: uuid}
+    Profile:
+      type: object
+      required: [id, display_name, grade, avatar_id]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        display_name: {type: string, maxLength: 30}
+        grade: {type: integer, enum: [2,6]}
+        avatar_id: {type: string}
+    LessonSummary:
+      type: object
+      required: [id, version_id, grade, subject_key, title, template_key]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        version_id: {$ref: '#/components/schemas/UUID'}
+        grade: {type: integer, enum: [2,6]}
+        subject_key: {type: string}
+        topic_id: {$ref: '#/components/schemas/UUID'}
+        title: {type: string}
+        template_key: {type: string}
+    LearningEvent:
+      type: object
+      description: Must satisfy telemetry.schema.json and server device scope validation.
+      required: [event_id, schema_version, event_type, occurred_at, sent_at, client_session_id, client_sequence, learner_id, device_id, payload]
+      properties:
+        event_id: {$ref: '#/components/schemas/UUID'}
+        schema_version: {type: integer, const: 1}
+        event_type: {type: string}
+        occurred_at: {type: string, format: date-time}
+        sent_at: {type: string, format: date-time}
+        client_session_id: {$ref: '#/components/schemas/UUID'}
+        client_sequence: {type: integer, minimum: 0}
+        learner_id: {$ref: '#/components/schemas/UUID'}
+        device_id: {$ref: '#/components/schemas/UUID'}
+        lesson_id: {$ref: '#/components/schemas/UUID'}
+        lesson_version_id: {$ref: '#/components/schemas/UUID'}
+        slide_id: {type: string}
+        payload: {type: object}
+    LearningScore:
+      type: object
+      required: [score, status, components, weights_version, questions_count, coverage_pct, computed_at]
+      properties:
+        score: {oneOf: [{type: number, minimum: 0, maximum: 100}, {type: 'null'}]}
+        status: {enum: [provisional, evidence_sufficient, insufficient_evidence]}
+        components: {type: object, additionalProperties: {oneOf: [{type: number}, {type: 'null'}]}}
+        weights_version: {type: string}
+        questions_count: {type: integer}
+        coverage_pct: {type: number, minimum: 0, maximum: 100}
+        confidence_note: {type: string}
+        computed_at: {type: string, format: date-time}
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses: {'200': {description: Service ready}}
+  /devices/pairing-code:
+    post:
+      tags: [Pairing]
+      operationId: createPairingCode
+      description: Rate-limited unauthenticated creation; code is single-use and short-lived.
+      responses:
+        '201':
+          description: Display pairing code
+          content: {application/json: {schema: {type: object, properties: {code: {type: string}, expires_at: {type: string, format: date-time}}}}}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+  /devices/pair:
+    post:
+      tags: [Pairing]
+      operationId: approvePairing
+      security: [{AdultSession: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [code], properties: {code: {type: string}}}}}}
+      responses: {'200': {description: One-time pairing approval}, '403': {$ref: '#/components/responses/ErrorResponse'}}
+  /profiles:
+    get:
+      tags: [Learners]
+      operationId: listProfiles
+      security: [{DeviceToken: []}, {AdultSession: []}]
+      responses:
+        '200': {description: Profiles in caller household, content: {application/json: {schema: {type: object, properties: {profiles: {type: array, items: {$ref: '#/components/schemas/Profile'}}}}}}}
+    post:
+      tags: [Learners]
+      operationId: upsertProfile
+      security: [{DeviceToken: []}, {AdultSession: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Profile'}}}}
+      responses: {'200': {description: Saved scoped profile}, '403': {$ref: '#/components/responses/ErrorResponse'}}
+  /catalog/manifest:
+    get:
+      tags: [Content]
+      operationId: getPublishedManifest
+      parameters:
+        - {in: query, name: grade, schema: {type: integer, enum: [2,6]}, required: true}
+      responses:
+        '200': {description: Only published lessons for grade, headers: {ETag: {schema: {type: string}}}}
+        '304': {description: No changes}
+  /catalog/lessons/{lessonId}:
+    get:
+      tags: [Content]
+      operationId: getPublishedLesson
+      parameters:
+        - {in: path, name: lessonId, required: true, schema: {$ref: '#/components/schemas/UUID'}}
+      responses: {'200': {description: Immutable approved published lesson JSON}, '404': {$ref: '#/components/responses/ErrorResponse'}}
+  /telemetry/batch:
+    post:
+      tags: [Telemetry]
+      operationId: ingestEvents
+      security: [{DeviceToken: []}]
+      parameters: [{in: header, name: Idempotency-Key, schema: {type: string}, required: true}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events: {type: array, minItems: 1, maxItems: 100, items: {$ref: '#/components/schemas/LearningEvent'}}
+      responses:
+        '200':
+          description: Mixed accepted, duplicate, rejected event acknowledgements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: {type: array, items: {$ref: '#/components/schemas/UUID'}}
+                  duplicates: {type: array, items: {$ref: '#/components/schemas/UUID'}}
+                  rejected: {type: array, items: {type: object, properties: {event_id: {$ref: '#/components/schemas/UUID'}, code: {type: string}}}}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+  /progress/sync:
+    post:
+      tags: [Learners]
+      operationId: syncLearnerProgress
+      security: [{DeviceToken: []}]
+      parameters: [{in: header, name: Idempotency-Key, schema: {type: string}, required: true}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [learner_id, lesson_id, attempt_id, client_revision], properties: {learner_id: {$ref: '#/components/schemas/UUID'}, lesson_id: {$ref: '#/components/schemas/UUID'}, attempt_id: {$ref: '#/components/schemas/UUID'}, client_revision: {type: integer}, slide_id: {type: string}, position_seconds: {type: number}, completed: {type: boolean}}}}}}
+      responses: {'200': {description: Canonical progress and server revision}, '409': {$ref: '#/components/responses/ErrorResponse'}}
+  /assessments/start:
+    post:
+      tags: [Assessments]
+      operationId: startAssessment
+      security: [{DeviceToken: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [learner_id, lesson_id, stage], properties: {learner_id: {$ref: '#/components/schemas/UUID'}, lesson_id: {$ref: '#/components/schemas/UUID'}, stage: {enum: [baseline, immediate, delayed]}}}}}}
+      responses: {'201': {description: Question IDs/option IDs only; answer keys not sent}}
+  /assessments/{attemptId}/answers:
+    post:
+      tags: [Assessments]
+      operationId: submitAnswer
+      security: [{DeviceToken: []}]
+      parameters: [{in: path, name: attemptId, required: true, schema: {$ref: '#/components/schemas/UUID'}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [question_version_key, selected_option_id], properties: {question_version_key: {type: string}, selected_option_id: {type: string}}}}}}
+      responses: {'200': {description: Server-scored result and feedback}}
+  /admin/curriculum:
+    get:
+      tags: [Admin]
+      operationId: listCurriculum
+      security: [{AdultSession: []}]
+      parameters: [{in: query, name: grade, schema: {type: integer, enum: [2,6]}}, {in: query, name: status, schema: {type: string}}]
+      responses: {'200': {description: Scoped curriculum search and review state}}
+  /admin/imports:
+    post:
+      tags: [Admin]
+      operationId: importSchoolSyllabus
+      security: [{AdultSession: []}]
+      description: Multipart document upload with server-side file validation; reviewer must approve mappings.
+      responses: {'202': {description: Queued import with job ID}, '403': {$ref: '#/components/responses/ErrorResponse'}}
+  /admin/imports/{jobId}/review:
+    post:
+      tags: [Admin]
+      operationId: reviewSchoolMapping
+      security: [{AdultSession: []}]
+      parameters: [{in: path, name: jobId, required: true, schema: {$ref: '#/components/schemas/UUID'}}]
+      responses: {'200': {description: Approved/rejected mapping decisions audited}}
+  /admin/lessons:
+    post:
+      tags: [Admin]
+      operationId: saveDraftLesson
+      security: [{AdultSession: []}]
+      responses: {'201': {description: Draft lesson version saved}}
+  /admin/lessons/{lessonId}/publish:
+    post:
+      tags: [Admin]
+      operationId: publishApprovedLesson
+      security: [{AdultSession: []}]
+      parameters: [{in: path, name: lessonId, required: true, schema: {$ref: '#/components/schemas/UUID'}}]
+      responses: {'200': {description: New published manifest revision}, '403': {$ref: '#/components/responses/ErrorResponse'}}
+  /admin/analytics/summary:
+    get:
+      tags: [Admin]
+      operationId: getAnalyticsSummary
+      security: [{AdultSession: []}]
+      parameters:
+        - {in: query, name: learner_id, schema: {$ref: '#/components/schemas/UUID'}}
+        - {in: query, name: from, schema: {type: string, format: date}}
+        - {in: query, name: to, schema: {type: string, format: date}}
+      responses: {'200': {description: Household-scoped engagement and score summaries}}
+  /admin/analytics/learning-scores:
+    get:
+      tags: [Admin]
+      operationId: getLearningScores
+      security: [{AdultSession: []}]
+      responses: {'200': {description: ELS with components, evidence sufficiency and as-of time}}
+  /admin/audit:
+    get:
+      tags: [Admin]
+      operationId: listAuditTrail
+      security: [{AdultSession: []}]
+      responses: {'200': {description: Redacted, role-scoped audit entries}}

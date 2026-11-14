@@ -1,0 +1,14 @@
+{
+  "event_id": "0b6f8a4e-6f43-4b5b-9d1e-0d7a3c7b2f11",
+  "schema_version": 1,
+  "event_type": "playback_heartbeat",
+  "occurred_at": "2026-11-14T09:00:00.000Z",
+  "sent_at": "2026-11-14T09:00:05.000Z",
+  "client_session_id": "8c1f0a77-1d2e-4c55-8f3e-6a2b9d0c4e21",
+  "client_sequence": 12,
+  "learner_id": "2f9d6c1b-8a7e-4f3d-9b2a-1c0e5d4f3a22",
+  "device_id": "5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d33",
+  "lesson_id": "f95143b0-7b4c-5452-8a3f-71096a538dff",
+  "slide_id": "step-4",
+  "payload": { "foreground": true, "playing": true, "visible_ms": 15000, "playback_ms": 15000, "theme_key": "candy", "slide_index": 4 }
+}

@@ -1,0 +1,6 @@
+{
+  "_comment": "Historical keys are not read by the live app and their exact shape was never captured. This fixture is an ASSUMED world-keyed ×3 shape; the importer must tolerate anything and back it up untouched (ADR-0002 §L2).",
+  "breaknlearn.profiles.v1": null,
+  "breaknlearn.progress.v1": { "puppy": { "slideId": "three-5", "position": 1, "complete": false, "updatedAt": 1761000000000 } },
+  "learnbreak-x3-v4-progress": { "school": { "slideId": "three-10", "complete": true, "updatedAt": 1760000000000 } }
+}

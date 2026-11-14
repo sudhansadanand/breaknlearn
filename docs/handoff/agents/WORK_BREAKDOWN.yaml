@@ -1,0 +1,57 @@
+version: 1
+project: BreakNLearn CMS + Curriculum + Telemetry + Learning Intelligence
+lead_policy:
+  maximize_parallelism_with_exclusive_files: true
+  preserve_live_domain: breaknlearn.vercel.app
+  forbid_production_secrets_in_repo: true
+  production_deploy_requires_owner_approval: true
+  baseline_preservation_required: true
+milestones:
+  - id: P0
+    name: Inventory + contracts
+    dependencies: []
+    agents: [A0]
+    deliverables: [existing_app_inventory, type_safe_contracts, ADRs, dev_setup, integration_plan]
+    gate: [existing_student_regression_fixture, openapi_valid, JSON_schema_valid]
+  - id: P1
+    name: Secure backend foundation
+    dependencies: [P0]
+    agents: [A1, A2]
+    deliverables: [db_migrations, RLS_tests, adult_auth, household_pairing, profile_migration]
+    gate: [cross_tenant_tests_pass, device_revocation_test, identity_spoof_denied]
+  - id: P2
+    name: Content pipeline
+    dependencies: [P1]
+    agents: [A3, A4]
+    deliverables: [CISCE_explorer, school_syllabus_import, lesson_editor, publishing_workflow, content_manifest_API]
+    gate: [unverified_topic_not_automatically_published, grade2_tables_only_live, draft_leak_test]
+  - id: P3
+    name: Student app runtime
+    dependencies: [P2]
+    agents: [A5]
+    deliverables: [TV_UI, profile_selector, offline_cache, legacy_import, published_content_consumer]
+    gate: [10_tables_x_6_worlds, two_profiles_independent, legacy_migration_idempotent, offline_playback]
+  - id: P4
+    name: Telemetry and assessments
+    dependencies: [P1, P2]
+    agents: [A6, A7]
+    deliverables: [event_queue, ingestion, progress_sync, pre_post_delayed_quizzes]
+    gate: [duplicate_events_deduped, hidden_time_excluded, scorer_server_authoritative]
+  - id: P5
+    name: Learning intelligence and reporting
+    dependencies: [P4]
+    agents: [A8]
+    deliverables: [ELS_engine, evidence_flags, parent_reports, recommendations]
+    gate: [formula_fixtures, missing_retention_not_zero, no_time_in_ELS]
+  - id: P6
+    name: Final security QA and operations
+    dependencies: [P3, P5]
+    agents: [A9, A0]
+    deliverables: [E2E, runbooks, security_review, backup_restore, LG_test_plan]
+    gate: [all_CI_green, cross_tenant_redteam_pass, rollback_rehearsed]
+  - id: P7
+    name: Owner-gated production rollout
+    dependencies: [P6]
+    agents: [A0]
+    deliverables: [staging_demo, owner_approval, deployment, monitoring, retrospective]
+    gate: [written_owner_approval, real_secrets_in_secret_store, rollback_ready]
