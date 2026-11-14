@@ -30,6 +30,17 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@22.18.0)(yaml@2.9.1)
 
+  apps/student: {}
+
+  packages/auth:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      jose:
+        specifier: 6.1.0
+        version: 6.1.0
+
   packages/contracts:
     dependencies:
       zod:
@@ -801,6 +812,9 @@ packages:
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+
+  jose@6.1.0:
+    resolution: {integrity: sha512-TTQJyoEoKcC1lscpVDCSsVgYzUDg/0Bt3WE//WiTPK6uOCQC2KZS4MpugbMWt/zyjkopgZoXhZuCi00gLudfUA==}
 
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
@@ -1842,6 +1856,8 @@ snapshots:
   is-number@7.0.0: {}
 
   isexe@2.0.0: {}
+
+  jose@6.1.0: {}
 
   js-tokens@9.0.1: {}
 
