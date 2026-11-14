@@ -1,4 +1,9 @@
-/** Browser helper for same-origin admin API calls with the double-submit CSRF header. */
+/**
+ * Browser helper for same-origin admin API calls with the double-submit CSRF header.
+ * Must stay a `fetch` (mode "cors" for same-origin): under `Referrer-Policy: no-referrer`
+ * browsers still send the real `Origin` for such requests, whereas classic <form> POSTs
+ * would send `Origin: null` and be rejected by the CSRF check.
+ */
 export interface ApiResult<T> {
   readonly ok: boolean;
   readonly status: number;

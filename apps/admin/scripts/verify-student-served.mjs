@@ -1,3 +1,4 @@
+/* global fetch, Buffer */
 // After `pnpm build`: starts `next start` and proves `/`, `/logo.webp` and `/music.wav`
 // are served byte-for-byte equal to legacy/live-snapshot-2026-11-14 (ADR-0006).
 // Usage: node scripts/verify-student-served.mjs [port]

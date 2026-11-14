@@ -22,7 +22,7 @@ function randomToken(bytes: number): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function pageCsp(nonce: string, dev: boolean): string {
+export function pageCsp(nonce: string, dev: boolean, https: boolean): string {
   return [
     "default-src 'self'",
     // Nonce + strict-dynamic: no inline script runs unless Next stamped it with this request's nonce.
@@ -36,7 +36,7 @@ export function pageCsp(nonce: string, dev: boolean): string {
     "base-uri 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    ...(dev ? [] : ["upgrade-insecure-requests"]),
+    ...(https ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }
 
@@ -77,7 +77,7 @@ export function middleware(req: NextRequest): NextResponse {
   }
 
   const nonce = randomToken(16);
-  const csp = pageCsp(nonce, dev);
+  const csp = pageCsp(nonce, dev, req.nextUrl.protocol === "https:");
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-nonce", nonce);
   // Next reads the nonce from the request CSP header and stamps its own scripts.
