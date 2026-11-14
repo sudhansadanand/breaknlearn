@@ -1,0 +1,20 @@
+{
+  "name": "@bnl/curriculum",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure school-syllabus extraction (CSV / TOC text / DOCX / text PDF) and deterministic chapter-to-topic mapping suggestions. No I/O, no network, no model calls.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bnl/contracts": "workspace:*",
+    "fflate": "0.8.2"
+  }
+}
