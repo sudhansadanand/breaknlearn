@@ -57,6 +57,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/lesson-engine:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
