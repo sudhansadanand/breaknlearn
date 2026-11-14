@@ -32,6 +32,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@bnl/assessment':
+        specifier: workspace:*
+        version: link:../../packages/assessment
       '@bnl/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -80,6 +83,18 @@ importers:
         version: 19.1.9(@types/react@19.1.12)
 
   apps/student: {}
+
+  packages/assessment:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@bnl/intelligence':
+        specifier: workspace:*
+        version: link:../intelligence
+      '@bnl/lesson-engine':
+        specifier: workspace:*
+        version: link:../lesson-engine
 
   packages/auth:
     dependencies:

@@ -11,7 +11,7 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | P1 | DB migrations + RLS, adult auth, household pairing, profiles | ✅ ready for review (legacy-import endpoint moves to P3 with the student adapter) | #2 `p1/secure-backend` |
 | P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API (+ pure engines: lesson-engine, telemetry, student-progress, intelligence) | ✅ ready for review (catalog API behind `FEATURE_CATALOG_API`) | `p2/content-pipeline` |
 | P3 | Student runtime: catalog consumer, offline cache, legacy import | ○ | — |
-| P4 | Telemetry queue/ingest, progress sync, assessments | ○ | — |
+| P4 | Telemetry queue/ingest, progress sync, assessments | ✅ ready for review (flags `FEATURE_TELEMETRY`, `FEATURE_ASSESSMENTS` off) | `p4/telemetry-sync` |
 | P5 | ELS engine, parent analytics, recommendations | ○ | — |
 | P6 | E2E, security review, runbooks, LG test plan | ○ | — |
 | P7 | Owner-gated production rollout | ⛔ needs written owner approval | — |
@@ -48,6 +48,18 @@ Deferred from P1 (tracked): Supabase Storage buckets/policies (SEC-007, needs Su
 | live regression | `pnpm test:e2e`, `pnpm check:snapshot` | 9/9, 3/3 |
 
 Known P2 limits: Supabase Storage driver is unit-tested against a fake only (no Supabase project yet); local-FS storage is refused in production. Quiz item keys in `bnl.quiz_items` (A4) differ from `multiplicationItemKey` in lesson-engine; reconciled in P4.
+
+## P4 gate evidence (2026-11-14)
+
+| Gate | Command | Result |
+|---|---|---|
+| duplicate_events_deduped, hidden_time_excluded | `pnpm test` (telemetry 18) + `apps/admin` learning integration | pass |
+| scorer_server_authoritative | `assessment-db.test.ts` (forged counts/responses rejected by 0006 guards), route tests (no answer key before submit) | pass |
+| legacy import idempotent | `learning-legacy-import.test.ts` | pass |
+| all suites | `pnpm test` / `pnpm test:integration` | admin 201, assessment 24; db 44/44, admin 64/64 |
+| live regression + student bytes | `pnpm test:e2e`, `test:served` | 9/9, unchanged |
+
+P4 defaults needing owner sign-off: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
 
 ## Owner inputs (spec §14)
 
