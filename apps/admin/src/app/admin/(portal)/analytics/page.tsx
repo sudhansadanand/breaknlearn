@@ -1,6 +1,7 @@
 import { loadForHousehold, requireAdultPage } from "../../../../server/page-auth";
 import { loadDashboard, type ChildDashboard, type LessonStatusRow } from "../../../../server/analytics";
 import { formatDuration } from "../../../../server/analytics/intelligence";
+import { featureEnabled } from "../../../../server/flags";
 import { DismissButton } from "./dismiss-button";
 import "./analytics.css";
 
@@ -116,6 +117,14 @@ function Child({ ch, timezone }: { ch: ChildDashboard; timezone: string }) {
 
 export default async function AnalyticsPage() {
   const adult = await requireAdultPage();
+  if (!featureEnabled("FEATURE_SCORES")) {
+    return (
+      <div className="analytics">
+        <h1>Learning progress</h1>
+        <p className="muted" role="status">Learning scores are not enabled yet.</p>
+      </div>
+    );
+  }
   const view = await loadForHousehold(adult, (sql, m, c) => loadDashboard(sql, c, m));
   return (
     <div className="analytics">

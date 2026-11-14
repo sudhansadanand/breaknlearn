@@ -412,7 +412,7 @@ describe("pairing-code claims (defence in depth below the BFF)", () => {
    * apps/admin/test/integration/redteam-routes.test.ts), so it is not reachable through the API today.
    * Fix: migration 0008 in docs/adr/proposals/A9-qa-ops.md (composite FK + redeem check). Remove `.fails` then.
    */
-  it.fails("A9-SEC-01: an adult cannot claim a pending code for a device of another household", async () => {
+  it("A9-SEC-01: an adult cannot claim a pending code for a device of another household", async () => {
     const pairingId = randomUUID();
     const codeHash = sha(`pending-${pairingId}`);
     await rolledBack({ kind: "public" }, async (sql) => {

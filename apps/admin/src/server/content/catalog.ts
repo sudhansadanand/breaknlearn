@@ -3,6 +3,7 @@ import { Grade, PublishedLesson, PublishedManifest, Uuid } from "@bnl/contracts"
 import type { Ctx } from "../http";
 import { json } from "../http";
 import { contentRepo } from "./port";
+import { requireFeature } from "../flags";
 
 /** ADR-0006: catalog responses are CDN-cacheable; private responses never are. */
 export const CATALOG_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=600";
@@ -31,6 +32,7 @@ const notFound = () => new HttpError(404, "not_found", "Not found");
 
 /** GET /api/v1/catalog/manifest?grade=2|6 — PUBLIC_PUBLISHED, `{kind:'public'}` only (SEC-006). */
 export async function catalogManifestHandler(req: Request, c: Ctx): Promise<Response> {
+  requireFeature("FEATURE_CATALOG_API", "Catalog API");
   const raw = new URL(req.url).searchParams.get("grade");
   const grade = Grade.safeParse(raw !== null && /^\d{1,2}$/.test(raw) ? Number(raw) : NaN);
   if (!grade.success) throw new HttpError(422, "validation_failed", "grade must be 2 or 6", { issues: [{ path: "grade", code: "invalid_literal" }] });
@@ -57,6 +59,7 @@ export async function catalogManifestHandler(req: Request, c: Ctx): Promise<Resp
 
 /** GET /api/v1/catalog/lessons/{lessonId} — the live version only; no answer keys; 404 otherwise. */
 export async function catalogLessonHandler(req: Request, c: Ctx, lessonIdParam: string): Promise<Response> {
+  requireFeature("FEATURE_CATALOG_API", "Catalog API");
   const id = Uuid.safeParse(lessonIdParam);
   // Malformed, unknown, draft-only and unpublished ids are indistinguishable (no existence oracle).
   if (!id.success) throw notFound();

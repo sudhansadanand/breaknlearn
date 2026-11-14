@@ -33,6 +33,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: ls /usr/lib/postgresql/
       - run: pnpm test:integration
+      - run: node scripts/ops/rehearse-backup-restore.mjs
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -46,4 +47,16 @@ jobs:
       - run: node apps/student/scripts/es5-check.mjs apps/student/dist/app.js apps/student/dist/sw.js
       - run: pnpm test:e2e --trace off
       - run: STUDENT_DIR=legacy/live-snapshot-2026-11-14 pnpm exec playwright test tests/e2e/legacy-regression.spec.ts --trace off
+  fullstack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: node tests/fullstack/run.mjs --trace off
+      - run: node scripts/ops/rehearse-rollback.mjs --skip-build
 # No deployment jobs: production deploys are owner-gated (P7). Preview deploys are added in P6.

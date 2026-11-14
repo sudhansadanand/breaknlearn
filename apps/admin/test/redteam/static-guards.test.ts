@@ -4,7 +4,7 @@
  *    module constant whose template has no `${}` interpolation (column lists), plus the fixed role switch in @bnl/db.
  *  - No secret, service key or password literal is shipped in source or in the student bundle sources.
  *  - Every FEATURE_* flag documented in .env.example is actually read by the code (rollout safety, spec §10.5).
- *    Flags that are documented but not enforced are FINDING A9-OPS-01 (it.fails until wired).
+ *    Every documented flag must be enforced (A9-OPS-01, fixed).
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -82,17 +82,14 @@ describe("feature flags documented in .env.example are enforced", () => {
   const env = readFileSync(join(ROOT, ".env.example"), "utf8");
   const flags = [...env.matchAll(/^(FEATURE_[A-Z_]+)=/gm)].map((m) => m[1]!);
   const source = SERVER_SRC.map((f) => readFileSync(f, "utf8")).join("\n");
-  const UNENFORCED = new Set(["FEATURE_PAIRING", "FEATURE_CATALOG_API", "FEATURE_SCORES"]);
 
   it("the documented flag set is the reviewed one", () => {
     expect(flags.sort()).toEqual(["FEATURE_ASSESSMENTS", "FEATURE_CATALOG_API", "FEATURE_PAIRING", "FEATURE_SCORES", "FEATURE_STUDENT_PAIRED", "FEATURE_STUDENT_SW", "FEATURE_TELEMETRY"]);
   });
 
   for (const flag of ["FEATURE_ASSESSMENTS", "FEATURE_CATALOG_API", "FEATURE_PAIRING", "FEATURE_SCORES", "FEATURE_STUDENT_PAIRED", "FEATURE_STUDENT_SW", "FEATURE_TELEMETRY"]) {
-    // A9-OPS-01: FEATURE_PAIRING / FEATURE_CATALOG_API / FEATURE_SCORES are documented as rollout gates but no
-    // handler reads them, so pairing, the catalog API and analytics are live as soon as the admin is deployed.
-    // Fix diff: docs/adr/proposals/A9-qa-ops.md §2. Remove `.fails` when wired.
-    (UNENFORCED.has(flag) ? it.fails : it)(`${flag} is read by server code`, () => {
+    // A9-OPS-01 (fixed): every documented rollout flag is read by server code.
+    it(`${flag} is read by server code`, () => {
       expect(source).toContain(flag);
     });
   }
