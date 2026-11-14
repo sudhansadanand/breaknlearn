@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "ES5",
+    "lib": ["ES5", "DOM"],
+    "types": [],
+    "declaration": false,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src"]
+}
