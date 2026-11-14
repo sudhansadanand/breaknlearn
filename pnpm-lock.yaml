@@ -41,6 +41,9 @@ importers:
       '@bnl/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bnl/lesson-engine':
+        specifier: workspace:*
+        version: link:../../packages/lesson-engine
       next:
         specifier: 15.5.6
         version: 15.5.6(@playwright/test@1.63.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
