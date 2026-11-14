@@ -9,7 +9,7 @@ plus where the value is stored.
 - [ ] Separate staging project created, holding no real child data.
 - [ ] Auth: public sign-ups off; site and redirect URLs set; email templates reviewed.
 - [ ] `bnl` is not in the exposed API schemas.
-- [ ] Migrations 0001–0007 and the core seeds applied to staging, then production (`DEPLOYMENT_RUNBOOK.md` §2). Verification queries returned 0 rows.
+- [ ] Migrations 0001–0008 and the core seeds applied to staging, then production (`DEPLOYMENT_RUNBOOK.md` §2). Verification queries returned 0 rows.
 - [ ] `bnl_app` password generated and stored. Private bucket `school-syllabi` created (§4).
 
 ## 2. People and access

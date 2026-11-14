@@ -59,6 +59,7 @@ done
 | 5 | `0005_content_item_bank.sql` | item-bank generation |
 | 6 | `0006_assessments.sql` | assessment guards |
 | 7 | `0007_analytics.sql` | analytics purge and scoring support |
+| 8 | `0008_pairing_device_household.sql` | binds pairing codes to their household (A9-SEC-01) |
 
 Then load the **core** seeds only:
 - `supabase/seed/0001_curriculum.sql`;
