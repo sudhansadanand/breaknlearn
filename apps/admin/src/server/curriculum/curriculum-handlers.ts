@@ -120,8 +120,9 @@ export async function listCurriculumHandler(req: Request, c: Ctx): Promise<Respo
 }
 
 /** POST /api/v1/admin/curriculum/{nodeId}/review — submit (editor|reviewer), verify/archive (reviewer). */
-export async function reviewCurriculumHandler(req: Request, c: Ctx, rawNodeId: string, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function reviewCurriculumHandler(req: Request, c: Ctx, rawNodeId: string, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   requireCsrf(req, c);
   const nodeId = pathUuid(rawNodeId);
   const body = await readJson(req, CurriculumReviewRequest);

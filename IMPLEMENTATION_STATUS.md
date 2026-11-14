@@ -8,8 +8,8 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 |---|---|---|---|
 | Baseline | Exact snapshot of live app on `main` | ✅ done (hash-verified) | direct commit `main` |
 | P0 | Inventory, frozen contracts, ADRs, dev setup, regression fixture | ✅ ready for review | #1 `foundation/contracts` |
-| P1 | DB migrations + RLS, adult auth, household pairing, profiles | ✅ ready for review (legacy-import endpoint moves to P3 with the student adapter) | `p1/secure-backend` |
-| P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API | ○ | — |
+| P1 | DB migrations + RLS, adult auth, household pairing, profiles | ✅ ready for review (legacy-import endpoint moves to P3 with the student adapter) | #2 `p1/secure-backend` |
+| P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API (+ pure engines: lesson-engine, telemetry, student-progress, intelligence) | ✅ ready for review (catalog API behind `FEATURE_CATALOG_API`) | `p2/content-pipeline` |
 | P3 | Student runtime: catalog consumer, offline cache, legacy import | ○ | — |
 | P4 | Telemetry queue/ingest, progress sync, assessments | ○ | — |
 | P5 | ELS engine, parent analytics, recommendations | ○ | — |
@@ -36,6 +36,18 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | student bytes unchanged when co-hosted | `pnpm --filter @bnl/admin build && pnpm --filter @bnl/admin test:served` | 4/4 sha256 match |
 
 Deferred from P1 (tracked): Supabase Storage buckets/policies (SEC-007, needs Supabase project → P2 imports), data-deletion job (OPS-005 → P6), Supabase session refresh (sessions ~1 h).
+
+## P2 gate evidence (2026-11-14)
+
+| Gate | Command | Result |
+|---|---|---|
+| SEC-001 every admin route fails closed | `apps/admin/test/sec-001.test.ts` auto-discovers every `route.ts` under `api/v1/admin` | 53/53: 401 + `no-store`, no audit rows, no storage/config built before auth |
+| curriculum + import + CMS route tests | `pnpm test` | admin 168 (7 files), all packages green |
+| RLS / publish / item-bank backstops | `pnpm test:integration` (throwaway Postgres 16, migrations 0001–0005) | db 44/44, admin 35/35 |
+| student bytes unchanged | `pnpm build && pnpm --filter @bnl/admin test:served` | sha256 match |
+| live regression | `pnpm test:e2e`, `pnpm check:snapshot` | 9/9, 3/3 |
+
+Known P2 limits: Supabase Storage driver is unit-tested against a fake only (no Supabase project yet); local-FS storage is refused in production. Quiz item keys in `bnl.quiz_items` (A4) differ from `multiplicationItemKey` in lesson-engine; reconciled in P4.
 
 ## Owner inputs (spec §14)
 

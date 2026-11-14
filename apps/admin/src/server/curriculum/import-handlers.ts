@@ -46,8 +46,9 @@ export function toApiPlan(p: PlanRow) {
 }
 
 /** POST /api/v1/admin/school-plans — owner/guardian, scoped to their household. */
-export async function createSchoolPlanHandler(req: Request, c: Ctx, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function createSchoolPlanHandler(req: Request, c: Ctx, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   requireCsrf(req, c);
   const body = await readJson(req, CreateSchoolPlanRequest);
   const plan = await withAdultHousehold(c, adult, async (sql, m) => {
@@ -78,8 +79,9 @@ export async function createSchoolPlanHandler(req: Request, c: Ctx, deps: Curric
 }
 
 /** GET /api/v1/admin/school-plans */
-export async function listSchoolPlansHandler(req: Request, c: Ctx, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function listSchoolPlansHandler(req: Request, c: Ctx, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   const plans = await withAdultHousehold(c, adult, (sql, m) => deps.repo.listPlans(sql, m.householdId));
   return json(c, { school_plans: plans.map(toApiPlan) });
 }
@@ -203,8 +205,9 @@ export interface ImportResponse {
  * Stores the file privately, extracts chapters inline (small files; the production path for large
  * files is a queue worker processing `import_jobs`), stages chapters and suggestions, and publishes nothing.
  */
-export async function createImportHandler(req: Request, c: Ctx, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function createImportHandler(req: Request, c: Ctx, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   requireCsrf(req, c);
   const keyHeader = req.headers.get(IDEMPOTENCY_HEADER);
   const key = IdempotencyKey.safeParse(keyHeader ?? "");
@@ -354,8 +357,9 @@ export async function loadJob(sql: Sql, deps: CurriculumDeps, jobId: string, hou
 }
 
 /** GET /api/v1/admin/imports/{jobId} — household-scoped; other households get 404. */
-export async function getImportHandler(req: Request, c: Ctx, rawJobId: string, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function getImportHandler(req: Request, c: Ctx, rawJobId: string, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   const jobId = pathUuid(rawJobId);
   const job = await withAdultHousehold(c, adult, (sql, m) => loadJob(sql, deps, jobId, m.householdId));
   if (!job) throw new HttpError(404, "not_found", "Not found");
@@ -363,8 +367,9 @@ export async function getImportHandler(req: Request, c: Ctx, rawJobId: string, d
 }
 
 /** GET /api/v1/admin/imports */
-export async function listImportsHandler(req: Request, c: Ctx, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function listImportsHandler(req: Request, c: Ctx, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   const jobs = await withAdultHousehold(c, adult, (sql, m) => deps.repo.listJobs(sql, m.householdId, 100));
   return json(c, {
     jobs: jobs.map((j) => ({ id: j.id, status: j.status, school_plan_id: j.schoolPlanId, job_type: j.jobType, created_at: j.createdAt.toISOString(), chapters: j.chapterCount, errors: j.errors.length })),
@@ -379,8 +384,9 @@ export async function listImportsHandler(req: Request, c: Ctx, deps: CurriculumD
  * re-approving is a no-op and rejecting an approved mapping is 409. A node that was not suggested can be
  * approved as an explicit override (new row). Nothing is published.
  */
-export async function reviewImportHandler(req: Request, c: Ctx, rawJobId: string, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function reviewImportHandler(req: Request, c: Ctx, rawJobId: string, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   requireCsrf(req, c);
   const jobId = pathUuid(rawJobId);
   const body = await readJsonBounded(req, MappingReviewRequest, 128 * 1024);
@@ -442,8 +448,9 @@ export async function reviewImportHandler(req: Request, c: Ctx, rawJobId: string
 // GET /api/v1/admin/imports/{jobId}/file  (SEC-007)
 // ---------------------------------------------------------------------------
 /** 302 to a short-lived signed URL for the owning household only; 404 for anyone else. */
-export async function importFileHandler(req: Request, c: Ctx, rawJobId: string, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function importFileHandler(req: Request, c: Ctx, rawJobId: string, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   const jobId = pathUuid(rawJobId);
   const objectKey = await withAdultHousehold(c, adult, async (sql, m) => {
     const job = await deps.repo.getJob(sql, jobId, m.householdId);
@@ -460,8 +467,9 @@ export async function importFileHandler(req: Request, c: Ctx, rawJobId: string, 
  * unexpired signature, and the object must belong to the caller's household. 404 when the
  * deployment uses Supabase storage.
  */
-export async function localObjectHandler(req: Request, c: Ctx, deps: CurriculumDeps = getCurriculumDeps()): Promise<Response> {
+export async function localObjectHandler(req: Request, c: Ctx, depsArg?: CurriculumDeps): Promise<Response> {
   const adult = await requireAdult(req, c);
+  const deps = depsArg ?? getCurriculumDeps();
   const local = deps.localStorage;
   if (!local) throw new HttpError(404, "not_found", "Not found");
   const ref = local.verifySignedUrl(new URL(req.url).searchParams);
