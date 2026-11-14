@@ -1,0 +1,16 @@
+.analytics .note { background: #fff; border-left: 4px solid var(--bnl-sky); padding: 8px 12px; margin: 8px 0 16px; }
+.analytics table caption { text-align: left; font-weight: 700; padding: 4px 0 8px; }
+.analytics td.num { font-variant-numeric: tabular-nums; }
+.analytics .ev { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; border: 1px solid transparent; }
+.analytics .ev-measured { background: #eaf7dc; border-color: #5c8a2a; color: #23410a; }
+.analytics .ev-low { background: #fff1d6; border-color: #9a6500; color: #4a3000; }
+.analytics .ev-none { background: #f1eef7; border-color: #6b6390; color: #2f2a47; }
+.analytics .detail { display: block; font-size: 0.8rem; color: #5f5a70; }
+.analytics .recs { list-style: none; padding: 0; margin: 0; }
+.analytics .recs li { padding: 10px 0; border-bottom: 1px solid #eee4d2; }
+.analytics .recs li.dismissed { opacity: 0.75; }
+.analytics .link-button { background: transparent; color: var(--bnl-purple); border: 2px solid var(--bnl-purple); padding: 2px 12px; margin: 4px 0 0; }
+.analytics dl.activity { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.analytics dl.activity dt { font-weight: 600; }
+.analytics dl.activity dd { margin: 0; }
+.analytics .table-wrap { overflow-x: auto; }
