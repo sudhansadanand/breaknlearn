@@ -26,7 +26,8 @@ export function redact(value: unknown, depth = 0): unknown {
   if (value === null || typeof value !== "object") return value;
   if (value instanceof Date) return value.toISOString();
   if (value instanceof Error) {
-    return { name: value.name, message: redactString(value.message) };
+    // `type` rather than `name`: a `name` key would itself be redacted as a person's name.
+    return { type: value.name, message: redactString(value.message) };
   }
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   const out: Record<string, unknown> = {};
