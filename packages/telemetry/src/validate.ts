@@ -7,7 +7,7 @@ import {
 } from "@bnl/contracts";
 import { z } from "zod";
 
-type RejectionCode = z.infer<typeof import("@bnl/contracts").RejectionCode>;
+export type RejectionCode = z.infer<typeof import("@bnl/contracts").RejectionCode>;
 
 export interface DeviceScope {
   readonly deviceId: string;
@@ -15,6 +15,11 @@ export interface DeviceScope {
   readonly learnerIds: ReadonlySet<string>;
   /** Lesson ids that exist (any version); unknown ids are rejected. */
   readonly knownLessonIds: ReadonlySet<string>;
+  /**
+   * Known lesson versions (version id -> lesson id). When given, an event naming a version that is
+   * absent, or that belongs to a different lesson than its `lesson_id`, is rejected as `lesson_unknown`.
+   */
+  readonly lessonVersions?: ReadonlyMap<string, string>;
 }
 
 export type Checked = { ok: true; event: Event } | { ok: false; event_id: string | null; code: RejectionCode };
@@ -28,6 +33,10 @@ export function checkEvent(raw: unknown, scope: DeviceScope, now: Date): Checked
   if (e.device_id !== scope.deviceId) return { ok: false, event_id: e.event_id, code: "device_mismatch" };
   if (!scope.learnerIds.has(e.learner_id)) return { ok: false, event_id: e.event_id, code: "learner_not_in_household" };
   if (e.lesson_id && !scope.knownLessonIds.has(e.lesson_id)) return { ok: false, event_id: e.event_id, code: "lesson_unknown" };
+  if (e.lesson_version_id && scope.lessonVersions) {
+    const owner = scope.lessonVersions.get(e.lesson_version_id);
+    if (!owner || (e.lesson_id !== undefined && owner !== e.lesson_id)) return { ok: false, event_id: e.event_id, code: "lesson_unknown" };
+  }
   const occurred = Date.parse(e.occurred_at);
   if (occurred - now.getTime() > TELEMETRY_MAX_FUTURE_SKEW_MS) return { ok: false, event_id: e.event_id, code: "clock_skew_future" };
   if (now.getTime() - occurred > TELEMETRY_MAX_OFFLINE_HOURS * 3_600_000) return { ok: false, event_id: e.event_id, code: "too_old" };

@@ -8,7 +8,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@bnl/auth", "@bnl/contracts"],
+  transpilePackages: ["@bnl/auth", "@bnl/contracts", "@bnl/student-progress", "@bnl/telemetry"],
   // Lint runs once at the monorepo root (`pnpm lint`), not inside `next build`.
   eslint: { ignoreDuringBuilds: true },
   async rewrites() {
