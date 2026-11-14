@@ -1,0 +1,33 @@
+/** Fixed ids from supabase/seed/dev_synthetic.sql (SYNTHETIC data, dev/test only). */
+export const HH_A = "11111111-1111-4111-8111-111111111111";
+export const HH_B = "22222222-2222-4222-8222-222222222222";
+export const OWNER_A = "a0000000-0000-4000-8000-0000000000a1";
+export const GUARDIAN_A = "a0000000-0000-4000-8000-0000000000a2";
+export const OWNER_B = "b0000000-0000-4000-8000-0000000000b1";
+export const EDITOR = "e0000000-0000-4000-8000-0000000000e1";
+export const REVIEWER = "e0000000-0000-4000-8000-0000000000e2";
+export const PUBLISHER = "e0000000-0000-4000-8000-0000000000e3";
+export const ANALYST = "e0000000-0000-4000-8000-0000000000e4";
+export const EDITOR_REVIEWER = "e0000000-0000-4000-8000-0000000000e5";
+export const DEVICE_A = "d0000000-0000-4000-8000-0000000000a1";
+export const DEVICE_A_REVOKED = "d0000000-0000-4000-8000-0000000000a2";
+export const DEVICE_B = "d0000000-0000-4000-8000-0000000000b1";
+export const LEARNER_A1 = "c0000000-0000-4000-8000-0000000000a1";
+export const LEARNER_A2 = "c0000000-0000-4000-8000-0000000000a2";
+export const LEARNER_B1 = "c0000000-0000-4000-8000-0000000000b1";
+export const PROGRESS_A1 = "90000000-0000-4000-8000-0000000000a1";
+export const PROGRESS_B1 = "90000000-0000-4000-8000-0000000000b1";
+export const CONSENT_B = "f0000000-0000-4000-8000-0000000000b1";
+export const UPLOAD_A = "5d000000-0000-4000-8000-0000000000a1";
+export const DRAFT_LESSON = "1e000000-0000-4000-8000-000000000001";
+export const DRAFT_VERSION = "1f000000-0000-4000-8000-000000000001";
+export const MULT_TABLE_7 = "2b0028d9-dd24-5020-84f7-c75af77b7b39";
+export const MULT_TABLE_10 = "c888722d-7b0f-5dc2-b371-41b47d542367";
+export const SYSTEM_ACTOR = "00000000-0000-0000-0000-00000000005e";
+
+export const deviceA = { kind: "device", householdId: HH_A, deviceId: DEVICE_A } as const;
+export const deviceARevoked = { kind: "device", householdId: HH_A, deviceId: DEVICE_A_REVOKED } as const;
+export const deviceB = { kind: "device", householdId: HH_B, deviceId: DEVICE_B } as const;
+export const adultA = { kind: "adult", userId: OWNER_A } as const;
+export const adultB = { kind: "adult", userId: OWNER_B } as const;
+export const staff = (userId: string) => ({ kind: "staff", userId }) as const;
