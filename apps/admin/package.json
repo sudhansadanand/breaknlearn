@@ -10,8 +10,9 @@
     "build": "node scripts/copy-student.mjs && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
-    "test:served": "node scripts/verify-student-served.mjs"
+    "test": "vitest run --exclude \"test/integration/**\"",
+    "test:served": "node scripts/verify-student-served.mjs",
+    "test:integration": "node ../../scripts/db/test-db.mjs -- vitest run test/integration --no-file-parallelism"
   },
   "dependencies": {
     "@bnl/auth": "workspace:*",
@@ -20,7 +21,8 @@
     "postgres": "3.4.7",
     "react": "19.1.1",
     "react-dom": "19.1.1",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@bnl/db": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "19.1.12",

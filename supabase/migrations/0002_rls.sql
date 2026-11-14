@@ -344,7 +344,8 @@ create policy adult_rw on bnl.learner_profiles for all to bnl_adult
 -- ---------------------------------------------------------------------------
 grant select (id, household_id, label, token_version, approved_by, paired_at, last_seen_at, revoked_at, created_at, updated_at)
   on bnl.paired_devices to bnl_adult;
-grant update (label) on bnl.paired_devices to bnl_adult;
+-- Adults rename and revoke their household's devices (revoke clears the refresh hash and bumps token_version).
+grant update (label, revoked_at, token_version, refresh_token_hash) on bnl.paired_devices to bnl_adult;
 -- A2 approve-pairing flow (bnl_adult) creates the device row for one of the adult's households.
 grant insert (id, household_id, label, token_version, approved_by, paired_at) on bnl.paired_devices to bnl_adult;
 drop policy if exists adult_insert on bnl.paired_devices;

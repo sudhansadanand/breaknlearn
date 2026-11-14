@@ -7,8 +7,8 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | Milestone | Scope | Status | PR |
 |---|---|---|---|
 | Baseline | Exact snapshot of live app on `main` | ✅ done (hash-verified) | direct commit `main` |
-| P0 | Inventory, frozen contracts, ADRs, dev setup, regression fixture | ✅ ready for review | `foundation/contracts` |
-| P1 | DB migrations + RLS, adult auth, household pairing, profile migration | ⏳ next | — |
+| P0 | Inventory, frozen contracts, ADRs, dev setup, regression fixture | ✅ ready for review | #1 `foundation/contracts` |
+| P1 | DB migrations + RLS, adult auth, household pairing, profiles | ✅ ready for review (legacy-import endpoint moves to P3 with the student adapter) | `p1/secure-backend` |
 | P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API | ○ | — |
 | P3 | Student runtime: catalog consumer, offline cache, legacy import | ○ | — |
 | P4 | Telemetry queue/ingest, progress sync, assessments | ○ | — |
@@ -25,6 +25,17 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | JSON_schema_valid + Zod parity | same suite (28 tests) | passed |
 | snapshot integrity | `pnpm check:snapshot` | 3/3 hashes match |
 | lint / typecheck | `pnpm lint`, `pnpm typecheck` | passed |
+
+## P1 gate evidence (2026-11-14)
+
+| Gate | Command | Result |
+|---|---|---|
+| cross_tenant_tests_pass | `pnpm --filter @bnl/db test:integration` (throwaway Postgres 16) | 44/44 |
+| device_revocation_test, identity_spoof_denied | `pnpm --filter @bnl/admin test:integration` (handlers × real RLS) | 6/6 |
+| auth / BFF unit + route tests | `pnpm test` | auth 41, admin 92, db 9, contracts 28 |
+| student bytes unchanged when co-hosted | `pnpm --filter @bnl/admin build && pnpm --filter @bnl/admin test:served` | 4/4 sha256 match |
+
+Deferred from P1 (tracked): Supabase Storage buckets/policies (SEC-007, needs Supabase project → P2 imports), data-deletion job (OPS-005 → P6), Supabase session refresh (sessions ~1 h).
 
 ## Owner inputs (spec §14)
 

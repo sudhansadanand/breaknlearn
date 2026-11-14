@@ -11,6 +11,7 @@ import {
   type RateLimiter,
   type ServerKeys,
 } from "@bnl/auth";
+import { createDb, withDbContext } from "@bnl/db";
 import { unwiredDbRunner, type DbRunner } from "./db-port";
 import { sqlRepos, type Repos } from "./repos";
 
@@ -92,8 +93,21 @@ export function buildDeps(env: Env, db: DbRunner): AppDeps {
   };
 }
 
+/**
+ * Real database wiring (ADR-0005): BNL_APP_DB_URL logs in as the `bnl_app` role, which can only
+ * act after `withDbContext` switches to a request role. Without it the app fails closed.
+ */
+export function dbRunnerFromEnv(env: Env): DbRunner | null {
+  const url = env.BNL_APP_DB_URL;
+  if (!url) return null;
+  // Transaction-mode poolers (Supabase/Vercel) do not support prepared statements.
+  const db = createDb(url, { prepare: env.BNL_DB_PREPARE === "true", max: Number(env.BNL_DB_POOL_MAX ?? 5) });
+  return (ctx, fn) => withDbContext(db, ctx, fn);
+}
+
 export function getDeps(): AppDeps {
   if (override) return override;
+  if (dbRunner === unwiredDbRunner) dbRunner = dbRunnerFromEnv(process.env) ?? unwiredDbRunner;
   cached ??= buildDeps(process.env, dbRunner);
   return cached;
 }
