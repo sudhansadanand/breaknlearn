@@ -189,6 +189,7 @@ create table if not exists bnl.household_memberships (
   household_id uuid not null references bnl.households(id) on delete cascade,
   auth_user_id uuid not null,
   role text not null check (role in ('owner', 'guardian')),
+  active boolean not null default true,  -- A2 contract; access also requires revoked_at is null
   invited_by uuid,
   revoked_at timestamptz,
   created_at timestamptz not null default now(),
@@ -224,7 +225,7 @@ create table if not exists bnl.learner_profiles (
     check (jsonb_typeof(preferences) = 'object'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (household_id, slot),
+  constraint learner_profiles_household_slot_key unique (household_id, slot),
   unique (id, household_id)
 );
 
@@ -899,11 +900,12 @@ create table if not exists bnl.job_runs (
 -- Append-only. metadata must never contain names, answers or tokens (ADR-0005 #11).
 create table if not exists bnl.audit_logs (
   id uuid primary key default gen_random_uuid(),
-  actor_type text not null check (actor_type in ('user', 'device', 'system', 'job')),
-  actor_id uuid,
+  -- Derived from the request role by trigger (bnl_device -> device, bnl_job -> job, adult/staff -> user).
+  actor_type text not null default 'user' check (actor_type in ('user', 'device', 'system', 'job')),
+  actor_auth_id uuid,  -- auth user id (user), device id (device); null for system/job
   household_id uuid references bnl.households(id) on delete set null,
-  action text not null check (action ~ '^[a-z0-9_]+(\.[a-z0-9_]+)+$'),
-  target_type text not null check (target_type ~ '^[a-z0-9_]+$'),
+  action text not null check (action ~ '^[a-z0-9_.:-]{1,64}$'),
+  target_type text not null check (target_type ~ '^[a-z0-9_.:-]{1,64}$'),
   target_id uuid,
   request_id text check (request_id is null or char_length(request_id) <= 128),
   metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
@@ -912,6 +914,24 @@ create table if not exists bnl.audit_logs (
 );
 create index if not exists idx_audit_household_time on bnl.audit_logs(household_id, created_at desc);
 create index if not exists idx_audit_target on bnl.audit_logs(target_type, target_id);
+
+create or replace function bnl.tg_audit_actor_type() returns trigger
+language plpgsql set search_path = pg_catalog, pg_temp
+as $$
+begin
+  new.actor_type := case current_user
+    when 'bnl_device' then 'device'
+    when 'bnl_job' then 'job'
+    when 'bnl_adult' then 'user'
+    when 'bnl_staff' then 'user'
+    when 'bnl_public' then 'user'
+    else new.actor_type end;
+  return new;
+end
+$$;
+drop trigger if exists audit_actor_type on bnl.audit_logs;
+create trigger audit_actor_type before insert on bnl.audit_logs
+  for each row execute function bnl.tg_audit_actor_type();
 
 create table if not exists bnl.idempotency_keys (
   id uuid primary key default gen_random_uuid(),
@@ -929,13 +949,16 @@ create table if not exists bnl.idempotency_keys (
 );
 create index if not exists idx_idempotency_expiry on bnl.idempotency_keys(expires_at);
 
+-- Fixed-window counters (A2 contract): one row per (key, window_start). Keys must be hashed (no raw IPs/emails).
 create table if not exists bnl.rate_limit_buckets (
   id uuid primary key default gen_random_uuid(),
-  bucket_key text not null unique check (char_length(bucket_key) between 1 and 200),
-  window_start timestamptz not null default now(),
-  hits integer not null default 0 check (hits >= 0),
+  key text not null check (char_length(key) between 1 and 200),
+  window_start timestamptz not null,
+  window_seconds integer not null check (window_seconds > 0),
+  count integer not null default 0 check (count >= 0),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (key, window_start)
 );
 
 create table if not exists bnl.data_deletion_requests (

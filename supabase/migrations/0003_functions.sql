@@ -119,7 +119,7 @@ create or replace function bnl._audit(p_actor_type text, p_actor uuid, p_househo
   p_target_type text, p_target uuid, p_metadata jsonb) returns void
 language sql security definer set search_path = pg_catalog, pg_temp
 as $$
-  insert into bnl.audit_logs (actor_type, actor_id, household_id, action, target_type, target_id, metadata)
+  insert into bnl.audit_logs (actor_type, actor_auth_id, household_id, action, target_type, target_id, metadata)
   values (p_actor_type, case when p_actor_type = 'system' then null else p_actor end, p_household, p_action,
           p_target_type, p_target, coalesce(p_metadata, '{}'::jsonb))
 $$;
@@ -702,22 +702,24 @@ begin
 end
 $$;
 
--- Fixed-window rate limiter. Returns true when the call is allowed. Keys should be hashed (no raw IPs/emails).
-create or replace function bnl.rate_limit_hit(p_bucket_key text, p_window_seconds integer, p_max_hits integer) returns boolean
+-- Fixed-window rate limiter over bnl.rate_limit_buckets(key, window_start, window_seconds, count).
+-- Returns true when the call is allowed. Keys should be hashed (no raw IPs/emails).
+create or replace function bnl.rate_limit_hit(p_key text, p_window_seconds integer, p_max_hits integer) returns boolean
 language plpgsql security definer set search_path = pg_catalog, pg_temp
 as $$
 declare
-  v_hits integer;
+  v_count integer;
+  v_window timestamptz;
 begin
   if p_window_seconds < 1 or p_max_hits < 1 then
     raise exception 'bnl: invalid rate limit' using errcode = '22023';
   end if;
-  insert into bnl.rate_limit_buckets as b (bucket_key, window_start, hits) values (p_bucket_key, now(), 1)
-  on conflict (bucket_key) do update set
-    hits = case when b.window_start <= now() - make_interval(secs => p_window_seconds) then 1 else b.hits + 1 end,
-    window_start = case when b.window_start <= now() - make_interval(secs => p_window_seconds) then now() else b.window_start end
-  returning b.hits into v_hits;
-  return v_hits <= p_max_hits;
+  v_window := to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  insert into bnl.rate_limit_buckets as b (key, window_start, window_seconds, count)
+  values (p_key, v_window, p_window_seconds, 1)
+  on conflict (key, window_start) do update set count = b.count + 1
+  returning b.count into v_count;
+  return v_count <= p_max_hits;
 end
 $$;
 
@@ -747,7 +749,7 @@ begin
   get diagnostics v_idem = row_count;
   delete from bnl.device_pairing_codes where expires_at < now() - interval '1 day';
   get diagnostics v_codes = row_count;
-  delete from bnl.rate_limit_buckets where window_start < now() - interval '1 day';
+  delete from bnl.rate_limit_buckets where window_start + make_interval(secs => window_seconds) < now() - interval '1 day';
   get diagnostics v_buckets = row_count;
   v_result := jsonb_build_object('learning_events', v_events, 'mastery_snapshots', v_snapshots,
     'recommendations', v_recs, 'idempotency_keys', v_idem, 'device_pairing_codes', v_codes,

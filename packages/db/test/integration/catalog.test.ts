@@ -97,7 +97,7 @@ describe("CAT-005 initial catalog", () => {
   it("publication was done by the audited system actor", async () => {
     const rows = await admin<{ n: number }[]>`
       select count(*)::int as n from bnl.audit_logs
-      where action = 'lesson.publish' and actor_type = 'system' and actor_id is null`;
+      where action = 'lesson.publish' and actor_type = 'system' and actor_auth_id is null`;
     expect(rows[0]?.n).toBe(10);
   });
 });

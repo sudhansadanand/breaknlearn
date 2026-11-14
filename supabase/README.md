@@ -68,11 +68,11 @@ households. The `bnl_app` password is set from the secret store and never from a
 | Role | Login | Entered by | Can see / do |
 |---|---|---|---|
 | `bnl_app` | yes, NOINHERIT | the BFF's pooled URL | nothing by itself; it must `SET ROLE` to one of the roles below |
-| `bnl_public` | no | `{kind:'public'}` | `lessons` and `lesson_versions` (catalog columns, live publications only), `published_manifests`, `grade_subjects`; pairing bootstrap functions. Never `quiz_items`, drafts, uploads or child data |
-| `bnl_device` | no | `{kind:'device', householdId, deviceId}` | its own household's learners, progress, sessions, events, attempts, responses (read-only), review schedule and migration tables, but only while the device is not revoked and belongs to that household. Reads published content. Scores answers via `bnl.score_answer` |
-| `bnl_adult` | no | `{kind:'adult', userId}` | households where the user is owner or guardian (`bnl.adult_household_ids()`): children, progress and analytics (read), devices (no token hashes), consents, school plans and uploads. Owners manage memberships |
+| `bnl_public` | no | `{kind:'public'}` | `lessons` and `lesson_versions` (catalog columns, live publications only), `published_manifests`, `grade_subjects`; pairing bootstrap functions. Never `quiz_items`, drafts, uploads, pairing codes or child data |
+| `bnl_device` | no | `{kind:'device', householdId, deviceId}` | its own household's learners, progress, sessions, events, attempts, responses (read-only), review schedule and migration tables, but only while the device is not revoked and belongs to that household. Reads published content. Scores answers via `bnl.score_answer`. Always reads its own `paired_devices` row (even when revoked, so a stale `token_version` fails closed). Updates `last_seen_at`, and updates `refresh_token_hash`/`refresh_rotated_at`/`revoked_at`/`token_version` while not revoked |
+| `bnl_adult` | no | `{kind:'adult', userId}` | households where the user is owner or guardian (`bnl.adult_household_ids()`): children, progress and analytics (read), devices (no token hashes), consents, school plans and uploads. Owners manage memberships. Approve-pairing flow: reads unclaimed, unexpired `device_pairing_codes`; claims one (`household_id`, `approved_by`, `approved_at`, `device_id`) only for an active own household; inserts `paired_devices` and `audit_logs` there |
 | `bnl_staff` | no | `{kind:'staff', userId}` | content tables per `staff_roles`. Editors create and edit drafts. Reviewers approve or reject through `bnl.transition_lesson_version`. Publishers use the publish, unpublish, pin and refresh functions. Analysts get metric definitions and run status only. No child-level table is granted |
-| `bnl_job` | no | `{kind:'job'}` | aggregation, scoring, recommendation, review and retention tables; reads learning data across households. Scheduled jobs only |
+| `bnl_job` | no | `{kind:'job'}` | aggregation, scoring, recommendation, review and retention tables; reads learning data across households. Also used by pre-auth server endpoints: pairing-code create and redeem (`device_pairing_codes`, first `paired_devices.refresh_token_hash`) and rate limiting (`rate_limit_buckets` INSERT … ON CONFLICT (key, window_start)) |
 | `bnl_owner` | no | never by request code | owns every SECURITY DEFINER function (`search_path = pg_catalog, pg_temp`) |
 | `anon`, `authenticated`, PUBLIC | n/a | n/a | nothing (SEC-005 test) |
 
@@ -111,8 +111,12 @@ Workflow functions take an explicit `actor`:
 | `create_pairing_code`, `redeem_pairing`, `rotate_device_refresh` | public | `redeem_pairing` returns `pending`, `redeemed` (once), `invalid_secret` or `gone` |
 | `approve_pairing(code_hash, household_id, label)`, `revoke_device(id)`, `create_household(label, tz)` | adult | Audited |
 | `touch_device()` | device | Returns the current `token_version`, or null if the device is revoked |
-| `rate_limit_hit(bucket_key, window_s, max)` | public, device, adult, staff | Fixed window. Hash IP and email keys before using them as bucket keys |
+| `rate_limit_hit(key, window_s, max)` | public, device, adult, staff | Fixed window. Hash IP and email keys before using them as bucket keys |
 | `purge_expired(raw_days = 90, aggregate_days = 395)` | job | Retention, audited |
+
+`audit_logs.actor_type` is set by a trigger from the request role (`bnl_device` → `device`,
+`bnl_job` → `job`, adult/staff → `user`). Callers only supply `actor_auth_id`: the auth user id,
+the device id, or null.
 
 Manifest checksum: `checksum = sha256_hex((manifest - 'checksum')::text)`, which is the jsonb text
 of the manifest without its own checksum field. The ETag is this checksum.

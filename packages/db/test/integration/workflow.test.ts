@@ -95,7 +95,7 @@ describe("publish workflow, rollback pin and OPS-003", () => {
     expect(lessons.map((l) => l.id)).toEqual(Object.values(MULTIPLICATION_LESSON_IDS));
     expect(lessons.find((l) => l.id === MULT_TABLE_7)?.version_id).toBe(v1!.id);
     const audit = await admin<{ action: string }[]>`
-      select action from bnl.audit_logs where actor_id = ${PUBLISHER} order by created_at`;
+      select action from bnl.audit_logs where actor_auth_id = ${PUBLISHER} order by created_at`;
     expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(["lesson.publish", "manifest.pin"]));
   });
 

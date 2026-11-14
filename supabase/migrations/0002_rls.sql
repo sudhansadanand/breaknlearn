@@ -26,14 +26,14 @@ create or replace function bnl.adult_household_ids() returns setof uuid
 language sql stable security definer set search_path = pg_catalog, pg_temp
 as $$
   select m.household_id from bnl.household_memberships m
-  where m.auth_user_id = bnl.current_actor_id() and m.revoked_at is null
+  where m.auth_user_id = bnl.current_actor_id() and m.active and m.revoked_at is null
 $$;
 
 create or replace function bnl.adult_owner_household_ids() returns setof uuid
 language sql stable security definer set search_path = pg_catalog, pg_temp
 as $$
   select m.household_id from bnl.household_memberships m
-  where m.auth_user_id = bnl.current_actor_id() and m.revoked_at is null and m.role = 'owner'
+  where m.auth_user_id = bnl.current_actor_id() and m.active and m.revoked_at is null and m.role = 'owner'
 $$;
 
 create or replace function bnl.has_staff_role(p_role text) returns boolean
@@ -345,6 +345,38 @@ create policy adult_rw on bnl.learner_profiles for all to bnl_adult
 grant select (id, household_id, label, token_version, approved_by, paired_at, last_seen_at, revoked_at, created_at, updated_at)
   on bnl.paired_devices to bnl_adult;
 grant update (label) on bnl.paired_devices to bnl_adult;
+-- A2 approve-pairing flow (bnl_adult) creates the device row for one of the adult's households.
+grant insert (id, household_id, label, token_version, approved_by, paired_at) on bnl.paired_devices to bnl_adult;
+drop policy if exists adult_insert on bnl.paired_devices;
+create policy adult_insert on bnl.paired_devices for insert to bnl_adult
+  with check (household_id in (select bnl.adult_household_ids()) and revoked_at is null);
+-- Every device request reads its own row (token_version / revoked_at check, even when revoked) and bumps
+-- last_seen_at; the refresh flow (bnl_device) rotates or revokes its own credential.
+grant select on bnl.paired_devices to bnl_device;
+grant update (refresh_token_hash, refresh_rotated_at, revoked_at, token_version, last_seen_at) on bnl.paired_devices to bnl_device;
+drop policy if exists device_own_read on bnl.paired_devices;
+create policy device_own_read on bnl.paired_devices for select to bnl_device
+  using (id = bnl.current_device_id() and household_id = bnl.current_household_id());
+drop policy if exists device_own_update on bnl.paired_devices;
+create policy device_own_update on bnl.paired_devices for update to bnl_device
+  using (id = bnl.current_device_id() and household_id = bnl.current_household_id() and revoked_at is null)
+  with check (id = bnl.current_device_id() and household_id = bnl.current_household_id());
+-- A2 redeem flow (bnl_job) installs the first refresh-token hash.
+grant select, update (refresh_token_hash, refresh_rotated_at, last_seen_at) on bnl.paired_devices to bnl_job;
+
+-- Pairing codes. Approve (bnl_adult): see unclaimed, unexpired codes and claim them for an own household.
+grant select on bnl.device_pairing_codes to bnl_adult;
+grant update (household_id, approved_by, approved_at, device_id) on bnl.device_pairing_codes to bnl_adult;
+drop policy if exists adult_claim_read on bnl.device_pairing_codes;
+create policy adult_claim_read on bnl.device_pairing_codes for select to bnl_adult
+  using ((household_id is null and expires_at > now() and redeemed_at is null)
+         or household_id in (select bnl.adult_household_ids()));
+drop policy if exists adult_claim on bnl.device_pairing_codes;
+create policy adult_claim on bnl.device_pairing_codes for update to bnl_adult
+  using (household_id is null and expires_at > now() and redeemed_at is null)
+  with check (household_id in (select bnl.adult_household_ids()) and approved_by = bnl.current_actor_id());
+-- Create + redeem (bnl_job, server-only, pre-auth endpoints).
+grant select, insert, update, delete on bnl.device_pairing_codes to bnl_job;
 drop policy if exists adult_read on bnl.paired_devices;
 create policy adult_read on bnl.paired_devices for select to bnl_adult
   using (household_id in (select bnl.adult_household_ids()));
@@ -456,20 +488,22 @@ create policy adult_request on bnl.data_deletion_requests for insert to bnl_adul
 -- ---------------------------------------------------------------------------
 grant insert on bnl.audit_logs to bnl_device, bnl_adult, bnl_staff, bnl_job;
 grant select on bnl.audit_logs to bnl_adult, bnl_staff;
+-- actor_type is set by trigger from the request role. A device may audit itself even right after it
+-- revoked itself (refresh-token reuse), so device_ok() is not required here.
 drop policy if exists device_insert on bnl.audit_logs;
 create policy device_insert on bnl.audit_logs for insert to bnl_device
-  with check (actor_type = 'device' and actor_id = bnl.current_device_id()
-              and household_id = bnl.current_household_id() and bnl.device_ok());
+  with check (household_id = bnl.current_household_id()
+              and (actor_auth_id is null or actor_auth_id = bnl.current_device_id()));
 drop policy if exists adult_insert on bnl.audit_logs;
 create policy adult_insert on bnl.audit_logs for insert to bnl_adult
-  with check (actor_type = 'user' and actor_id = bnl.current_actor_id()
+  with check ((actor_auth_id is null or actor_auth_id = bnl.current_actor_id())
               and household_id in (select bnl.adult_household_ids()));
 drop policy if exists adult_read on bnl.audit_logs;
 create policy adult_read on bnl.audit_logs for select to bnl_adult
   using (household_id in (select bnl.adult_household_ids()));
 drop policy if exists staff_insert on bnl.audit_logs;
 create policy staff_insert on bnl.audit_logs for insert to bnl_staff
-  with check (actor_type = 'user' and actor_id = bnl.current_actor_id() and household_id is null and bnl.is_staff());
+  with check ((actor_auth_id is null or actor_auth_id = bnl.current_actor_id()) and household_id is null and bnl.is_staff());
 drop policy if exists staff_read on bnl.audit_logs;
 create policy staff_read on bnl.audit_logs for select to bnl_staff using (household_id is null and bnl.is_staff());
 
@@ -498,8 +532,10 @@ grant select, insert, update, delete on bnl.mastery_snapshots, bnl.recommendatio
   bnl.metric_definitions, bnl.aggregation_runs, bnl.job_runs, bnl.review_schedule to bnl_job;
 grant update (foreground_estimated_ms, playback_ms, interaction_count, ended_at) on bnl.learning_sessions to bnl_job;
 grant update (quality_flag, session_id) on bnl.learning_events to bnl_job;
-grant delete on bnl.learning_events, bnl.idempotency_keys, bnl.rate_limit_buckets, bnl.device_pairing_codes to bnl_job;
-grant select on bnl.idempotency_keys, bnl.rate_limit_buckets, bnl.device_pairing_codes to bnl_job;
+grant delete on bnl.learning_events, bnl.idempotency_keys to bnl_job;
+grant select on bnl.idempotency_keys to bnl_job;
+-- A2 rate limiting (bnl_job): INSERT ... ON CONFLICT (key, window_start) DO UPDATE.
+grant select, insert, update, delete on bnl.rate_limit_buckets to bnl_job;
 grant select, update on bnl.data_deletion_requests, bnl.import_jobs, bnl.syllabus_uploads to bnl_job;
 grant select, insert, update on bnl.syllabus_chapters, bnl.chapter_topic_mappings to bnl_job;
 grant select on bnl.school_plans to bnl_job;

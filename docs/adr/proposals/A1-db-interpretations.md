@@ -24,3 +24,11 @@
    - `topic_id` (blueprint: `topic_node_id`)
    - `mastery_snapshots.questions_count` and `confidence_note`
    - `learning_events.quality_flag ∈ ok|clamped|late_arrival|clock_adjusted|sequence_gap|suspect`. ADR-0005 names the enum but not its values, so A6 should confirm them.
+6. **A2 alignment (lead request, 2026-11-14), applied:**
+   - `household_memberships.active` (access needs `active and revoked_at is null`)
+   - named constraint `learner_profiles_household_slot_key`
+   - `audit_logs.actor_auth_id`, with `actor_type` derived by trigger
+   - `rate_limit_buckets(key, window_start, window_seconds, count)` with unique `(key, window_start)`
+   - direct-SQL RLS paths for adult approve, job create/redeem/rate-limit, and device self-read/refresh
+
+   The SECURITY DEFINER pairing functions in `0003_functions.sql` remain as an alternative; A2 may ignore them.
