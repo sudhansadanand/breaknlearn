@@ -5,6 +5,7 @@
  */
 interface SwFetchEvent {
   request: { method: string; url: string; mode?: string; clone(): unknown };
+  clientId?: string;
   respondWith(r: unknown): void;
 }
 interface SwExtendableEvent {
@@ -28,7 +29,7 @@ interface SwScope {
   location: { origin: string };
   addEventListener(type: string, fn: (e: SwFetchEvent & SwExtendableEvent) => void): void;
   skipWaiting(): unknown;
-  clients: { claim(): unknown };
+  clients: { claim(): unknown; get(id: string): SwThenable<{ url: string } | undefined> };
   caches: {
     open(name: string): SwThenable<SwCache>;
     keys(): SwThenable<string[]>;
@@ -71,19 +72,37 @@ interface SwScope {
     const m = /^(https?:\/\/[^/]+)(\/[^?#]*)/.exec(req.url);
     if (!m || m[1] !== sw.location.origin || PATHS.indexOf(m[2]) < 0) return;
     const navigate = req.mode === "navigate";
-    const killing = /[?&]sw=off(&|$)/.test(req.url); // kill switch page load: never write the cache
+    const KILL = /[?&]sw=off(&|$)/;
+    const killing = KILL.test(req.url); // kill switch page load: never write the cache
+    const clientId = e.clientId;
     e.respondWith(
       sw.fetch(req).then(
         function (res) {
           if (res && res.status === 200 && res.type !== "opaque" && !killing) {
             const copy = res.clone();
-            // Only refresh a cache that still exists: after the kill switch deleted it, stay out.
-            sw.caches.has(CACHE).then(function (exists) {
-              if (exists)
-                sw.caches.open(CACHE).then(function (c) {
-                  return c.put(req, copy);
-                });
-            });
+            // Never write for a subresource of a `?sw=off` page (its wipe races this write), and only
+            // refresh a cache that still exists: after the kill switch deleted it, stay out.
+            const fromKillPage = clientId
+              ? sw.clients.get(clientId).then(
+                  function (cl) {
+                    return !!cl && KILL.test(cl.url);
+                  },
+                  function () {
+                    return false;
+                  },
+                )
+              : null;
+            const write = function (skip: boolean) {
+              if (skip) return;
+              sw.caches.has(CACHE).then(function (exists) {
+                if (exists)
+                  sw.caches.open(CACHE).then(function (c) {
+                    return c.put(req, copy);
+                  });
+              });
+            };
+            if (fromKillPage) fromKillPage.then(write);
+            else write(false);
           }
           return res;
         },

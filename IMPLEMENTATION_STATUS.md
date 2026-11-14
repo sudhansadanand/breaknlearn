@@ -10,7 +10,7 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | P0 | Inventory, frozen contracts, ADRs, dev setup, regression fixture | ✅ ready for review | #1 `foundation/contracts` |
 | P1 | DB migrations + RLS, adult auth, household pairing, profiles | ✅ ready for review (legacy-import endpoint moves to P3 with the student adapter) | #2 `p1/secure-backend` |
 | P2 | Curriculum explorer, school import, lesson editor, publishing, catalog API (+ pure engines: lesson-engine, telemetry, student-progress, intelligence) | ✅ ready for review (catalog API behind `FEATURE_CATALOG_API`) | `p2/content-pipeline` |
-| P3 | Student runtime: catalog consumer, offline cache, legacy import | ○ | — |
+| P3 | Student runtime: catalog consumer, offline cache, legacy import | ✅ ready for review (paired mode off unless `FEATURE_STUDENT_PAIRED`) | `p3/student-app` |
 | P4 | Telemetry queue/ingest, progress sync, assessments | ✅ ready for review (flags `FEATURE_TELEMETRY`, `FEATURE_ASSESSMENTS` off) | `p4/telemetry-sync` |
 | P5 | ELS engine, parent analytics, recommendations | ○ | — |
 | P6 | E2E, security review, runbooks, LG test plan | ○ | — |
@@ -60,6 +60,19 @@ Known P2 limits: Supabase Storage driver is unit-tested against a fake only (no 
 | live regression + student bytes | `pnpm test:e2e`, `test:served` | 9/9, unchanged |
 
 P4 defaults needing owner sign-off: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
+
+## P3 gate evidence (2026-11-14)
+
+| Gate | Command | Result |
+|---|---|---|
+| 10_tables_x_6_worlds, two_profiles_independent, legacy_migration_idempotent, offline_playback | `pnpm test:e2e` (student-* specs + legacy regression against the new bundle) | 30/30, twice in a row |
+| parity with live app | `student-parity.spec.ts` drives snapshot and new bundle side by side | markup, storage and focus identical at every step |
+| frozen live app still passes | `STUDENT_DIR=legacy/live-snapshot-2026-11-14 playwright test tests/e2e/legacy-regression.spec.ts` | 9/9 |
+| ES5 only | `node apps/student/scripts/es5-check.mjs …` + acorn ecmaVersion 5 test | pass |
+| served bytes | `pnpm build && pnpm --filter @bnl/admin test:served` | 6/6 (index, app.js, sw.js from build; logo/music = snapshot) |
+| unit | `pnpm test` | student 42, admin 205 |
+
+Not verifiable here: physical LG webOS (TV-006): service worker support, Back key 461, audio autoplay.
 
 ## Owner inputs (spec §14)
 

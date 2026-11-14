@@ -10,5 +10,8 @@
     "check:es5": "node scripts/es5-check.mjs dist/app.js dist/sw.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0"
   }
 }

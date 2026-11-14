@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@bnl/auth", "@bnl/contracts", "@bnl/student-progress", "@bnl/telemetry"],
   // Lint runs once at the monorepo root (`pnpm lint`), not inside `next build`.
   eslint: { ignoreDuringBuilds: true },
+  async headers() {
+    // The student service worker must always be revalidated so the kill switch reaches every TV.
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache" },
+          { key: "Content-Type", value: "text/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return {
       beforeFiles: [{ source: "/", destination: "/index.html" }],
