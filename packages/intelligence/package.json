@@ -1,0 +1,12 @@
+{
+  "name": "@bnl/intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Effective Learning Score (ELS) engine and recommendation rules. Pure functions, no I/O.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@bnl/contracts": "workspace:*" }
+}

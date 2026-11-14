@@ -30,6 +30,8 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@22.18.0)(yaml@2.9.1)
 
+  apps/student: {}
+
   packages/contracts:
     dependencies:
       zod:
@@ -48,6 +50,12 @@ importers:
       yaml:
         specifier: 2.8.1
         version: 2.8.1
+
+  packages/intelligence:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
 packages:
 
