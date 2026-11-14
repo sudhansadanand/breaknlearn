@@ -50,6 +50,12 @@ importers:
       '@bnl/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@bnl/student-progress':
+        specifier: workspace:*
+        version: link:../../packages/student-progress
+      '@bnl/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       next:
         specifier: 15.5.6
         version: 15.5.6(@playwright/test@1.63.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
