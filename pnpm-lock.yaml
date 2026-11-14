@@ -104,6 +104,33 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/intelligence:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/lesson-engine:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/student-progress:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/telemetry:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+
 packages:
 
   '@emnapi/runtime@1.11.3':
