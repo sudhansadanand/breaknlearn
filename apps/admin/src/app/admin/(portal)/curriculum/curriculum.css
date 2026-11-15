@@ -1,0 +1,29 @@
+/* Curriculum explorer + school import (A3). Brand tokens come from admin.css. */
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.filters > div { min-width: 140px; }
+.filters label { margin-top: 0; }
+.filters button { margin-top: 0; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; border: 1px solid transparent; white-space: nowrap; }
+.chip.editorial_unverified { background: #fff1c2; border-color: var(--bnl-sun); color: #5c4400; }
+.chip.cisce_verified { background: #eaf7dc; border-color: var(--bnl-leaf); color: #24470a; }
+.chip.local_enrichment { background: #e4f6fd; border-color: var(--bnl-sky); color: #064a63; }
+.chip.school_specific { background: #efe6fb; border-color: var(--bnl-purple); color: var(--bnl-purple); }
+.chip.status { background: #f3efe6; border-color: #d8cfbd; color: var(--bnl-ink); }
+.chip.state-approved { background: #eaf7dc; border-color: var(--bnl-leaf); color: #24470a; }
+.chip.state-rejected { background: #fde8eb; border-color: var(--bnl-danger); color: var(--bnl-danger); }
+.chip.state-suggested { background: #f3efe6; border-color: #d8cfbd; color: var(--bnl-ink); }
+.row-subject td { background: #faf6ec; font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.actions button, button.small { margin-top: 0; padding: 4px 12px; font-size: 0.85rem; }
+button.ghost { background: #fff; color: var(--bnl-purple); border: 2px solid var(--bnl-purple); }
+.review-panel { margin-top: 8px; padding: 12px; border: 1px dashed #d8cfbd; border-radius: 8px; }
+.review-panel input, .review-panel select { max-width: 260px; }
+textarea { font: inherit; padding: 10px 12px; border: 2px solid #cfc6b3; border-radius: 8px; width: 100%; min-height: 160px; background: #fff; color: var(--bnl-ink); }
+textarea:focus { border-color: var(--bnl-purple); }
+.suggestions { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.suggestions li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.conf { font-variant-numeric: tabular-nums; color: #5f5a70; font-size: 0.85rem; }
+.table-wrap { overflow-x: auto; }
+.pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+fieldset { border: 1px solid #ece3d0; border-radius: 8px; padding: 8px 16px 16px; margin: 12px 0 0; }
+legend { font-weight: 700; }

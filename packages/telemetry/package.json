@@ -1,0 +1,20 @@
+{
+  "name": "@bnl/telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Telemetry: event validation, active-time reducer, durable client queue. No third-party analytics.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bnl/contracts": "workspace:*",
+    "zod": "3.25.76"
+  }
+}

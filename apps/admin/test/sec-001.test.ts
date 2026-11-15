@@ -49,9 +49,33 @@ async function expect401(res: Response) {
 }
 
 describe("SEC-001 API", () => {
-  it("covers every route file under /api/v1/admin", () => {
-    const files = walk(join(appDir, "api/v1/admin")).filter((f) => f.endsWith("route.ts")).map((f) => relative(appDir, f));
-    expect(files.sort()).toEqual(["api/v1/admin/[...rest]/route.ts", "api/v1/admin/consent/route.ts", "api/v1/admin/me/route.ts"]);
+  /** Every route file under /api/v1/admin, discovered from disk, so new routes are covered automatically. */
+  const adminRouteFiles = walk(join(appDir, "api/v1/admin"))
+    .filter((f) => f.endsWith("route.ts"))
+    .map((f) => relative(appDir, f))
+    .sort();
+  const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+  const ANY_PARAMS = {
+    rest: ["lessons"], nodeId: "a0000000-0000-4000-8000-000000000001", jobId: "a0000000-0000-4000-8000-000000000002",
+    lessonId: "a0000000-0000-4000-8000-000000000003", versionId: "a0000000-0000-4000-8000-000000000004", revision: "1",
+  };
+
+  it("discovers the admin route files (sanity: none missing from the scan)", () => {
+    expect(adminRouteFiles.length).toBeGreaterThanOrEqual(16);
+    expect(adminRouteFiles).toContain("api/v1/admin/me/route.ts");
+  });
+
+  it.each(adminRouteFiles)("%s: every exported method without a session → 401 (or 404 for dev-only routes)", async (file) => {
+    const mod = (await import(join(appDir, file))) as Partial<Record<(typeof METHODS)[number], AnyHandler>>;
+    const exported = METHODS.filter((m) => typeof mod[m] === "function");
+    expect(exported.length, file).toBeGreaterThan(0);
+    for (const m of exported) {
+      const body = m === "GET" ? undefined : {};
+      const res = await mod[m]!(req(m, `/${file.replace(/\/route\.ts$/, "")}`, { body, csrf: true }), params(ANY_PARAMS));
+      expect([401], `${m} ${file} -> ${res.status}`).toContain(res.status);
+      expect(res.headers.get("cache-control"), `${m} ${file}`).toBe("no-store");
+    }
+    expect(env.store.audit).toHaveLength(0);
   });
 
   it.each(ADULT_ROUTES)("%s %s without a session → 401", async (method, path, handler) => {
@@ -102,7 +126,7 @@ describe("SEC-001 pages", () => {
 
   it("every portal page and the portal layout verify the session server-side", () => {
     const portal = pageFiles.filter((f) => f.startsWith("admin/(portal)/"));
-    expect(portal.sort()).toEqual(["admin/(portal)/children/page.tsx", "admin/(portal)/devices/page.tsx", "admin/(portal)/page.tsx"]);
+    expect(portal.length).toBeGreaterThanOrEqual(3);
     for (const f of [...portal, "admin/(portal)/layout.tsx"]) {
       expect(readFileSync(join(appDir, f), "utf8"), f).toMatch(/await requireAdultPage\(\)/);
     }
