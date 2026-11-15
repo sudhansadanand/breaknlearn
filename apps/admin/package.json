@@ -25,10 +25,10 @@
     "@bnl/storage": "workspace:*",
     "@bnl/student-progress": "workspace:*",
     "@bnl/telemetry": "workspace:*",
-    "next": "15.5.6",
+    "next": "15.5.29",
     "postgres": "3.4.7",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
     "zod": "3.25.76"
   },
   "devDependencies": {
