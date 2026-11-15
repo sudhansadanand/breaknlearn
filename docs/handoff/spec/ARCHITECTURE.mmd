@@ -1,0 +1,35 @@
+flowchart TD
+  subgraph Admin[Protected Admin Application]
+    A[Guardian / Admin Login] --> B[CISCE Curriculum Explorer]
+    A --> C[School TOC Import + Mapping Review]
+    A --> D[Lesson Editor + Media]
+    B --> D
+    C --> D
+    D --> E[Approve + Publish]
+    A --> Z[Parent Analytics + ELS]
+  end
+  subgraph Backend[Secure Backend: Supabase + APIs]
+    E --> F[Immutable Lesson Versions]
+    F --> G[Published Manifest / Read API]
+    H[Household + Device Pairing] --> J[Scoped Progress API]
+    K[Telemetry Ingest + Dedup] --> L[Learning Event Store]
+    M[Server Scored Assessments] --> L
+    L --> N[Aggregation + ELS + Recommendations]
+    J --> N
+    N --> Z
+  end
+  subgraph Student[Existing breaknlearn.vercel.app]
+    P[Choose Grade 2 or 6 Profile] --> Q[Published Grade/Subject/Topic Catalog]
+    Q --> R[Offline-ready Lesson Player]
+    R --> S[Picture Quiz and Follow-ups]
+    R --> T[Buffered Telemetry + Progress]
+    S --> T
+  end
+  G --> Q
+  P <--> H
+  T --> J
+  T --> K
+  S --> M
+  N --> U[Personalized Next Lesson]
+  U --> Q
+  N -. Observational content feedback .-> D

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://breaknlearn.vercel.app/schemas/learning-event-v1.json",
+  "title": "BreakNLearn learning event v1 (frozen 2026-11-14, see ADR-0002)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "schema_version", "event_type", "occurred_at", "sent_at", "client_session_id", "client_sequence", "learner_id", "device_id", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "schema_version": { "const": 1 },
+    "event_type": {
+      "enum": ["app_opened", "profile_selected", "session_started", "lesson_started", "slide_entered", "slide_exited", "playback_paused", "playback_resumed", "playback_heartbeat", "quiz_started", "answer_submitted", "quiz_completed", "lesson_completed", "session_ended", "app_hidden", "sync_failed", "sync_succeeded"]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "sent_at": { "type": "string", "format": "date-time" },
+    "client_session_id": { "type": "string", "format": "uuid" },
+    "client_sequence": { "type": "integer", "minimum": 0 },
+    "learner_id": { "type": "string", "format": "uuid" },
+    "device_id": { "type": "string", "format": "uuid" },
+    "lesson_id": { "type": "string", "format": "uuid" },
+    "lesson_version_id": { "type": "string", "format": "uuid" },
+    "slide_id": { "type": "string", "maxLength": 128 },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "foreground": { "type": "boolean" },
+        "playing": { "type": "boolean" },
+        "visible_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
+        "playback_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
+        "theme_key": { "enum": ["puppy", "candy", "unicorn", "school", "treat", "farm"] },
+        "slide_index": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "quiz_attempt_id": { "type": "string", "format": "uuid" },
+        "attempt_stage": { "enum": ["baseline", "immediate", "delayed"] },
+        "question_version_key": { "type": "string", "maxLength": 128 },
+        "selected_option_id": { "type": "string", "maxLength": 128 },
+        "reason_code": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9_]+$" }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@bnl/student",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Student TV app. P0: the unmodified live app (public/). P3 adds the catalog/offline/telemetry adapters around it.",
+  "scripts": {
+    "dev": "node ../../scripts/static-server.mjs public 4173"
+  }
+}

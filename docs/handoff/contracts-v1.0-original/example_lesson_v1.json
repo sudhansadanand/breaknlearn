@@ -1,0 +1,16 @@
+{
+  "contract_version": 1,
+  "stable_key": "grade2.math.multiplication.table-7.puppy",
+  "grade": 2,
+  "subject_key": "math",
+  "topic_key": "grade2.math.multiplication",
+  "title": "7 Times Table — Puppy Park",
+  "status": "published",
+  "lesson_version": 1,
+  "template": "picture_groups_v1",
+  "config": {"factor": 7,"count_from": 1,"count_to": 10,"emoji": "🐶","theme": "puppy","seconds_per_slide": 7,"quiz_question_count": 3},
+  "slide_example": {"slide_id":"step-3","headline":"7 × 3 = 21","group_count":3,"objects_per_group":7,"total_objects":21},
+  "rights": {"type":"original_generated_content","reviewed":true},
+  "learning_outcome_keys": ["grade2.math.multiplication"],
+  "note": "Example contract only. UUIDs and publish state assigned by production import with review."
+}

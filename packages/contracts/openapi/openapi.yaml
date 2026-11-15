@@ -1,0 +1,829 @@
+openapi: 3.1.0
+info:
+  title: BreakNLearn API v1
+  version: 1.1.0
+  description: >-
+    Frozen v1 contract (2026-11-14). Revised from the handoff's contracts.openapi.yaml 1.0.0;
+    every change is listed in docs/adr/0002-contract-corrections.md. Changes after freeze must be
+    additive and need an ADR. Every endpoint enforces scope server-side; RLS is defence in depth.
+    Access classes: PUBLIC_PUBLISHED, PAIRED_DEVICE (DeviceToken), ADULT_GUARDIAN / EDITOR /
+    REVIEWER / PUBLISHER / ANALYST (AdultSession + role), SYSTEM_JOB (not exposed).
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://breaknlearn.vercel.app/api/v1
+    description: Production (owner-gated; not live until P7)
+security: []
+tags:
+  - name: Health
+  - name: Pairing
+  - name: Learners
+  - name: Content
+  - name: Telemetry
+  - name: Progress
+  - name: Assessments
+  - name: Admin
+  - name: Household
+
+components:
+  securitySchemes:
+    DeviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived server-signed device token (claims sub=device_id, hid=household_id, ver=token_version).
+    AdultSession:
+      type: apiKey
+      in: cookie
+      name: bnl_admin_session
+      description: Supabase Auth session for an adult. Mutations also require an Origin match and the X-CSRF-Token header.
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+    Cursor:
+      in: query
+      name: cursor
+      schema: { type: string, maxLength: 200 }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Grade:
+      in: query
+      name: grade
+      required: true
+      schema: { $ref: '#/components/schemas/Grade' }
+    LessonId:
+      in: path
+      name: lessonId
+      required: true
+      schema: { $ref: '#/components/schemas/UUID' }
+    VersionId:
+      in: path
+      name: versionId
+      required: true
+      schema: { $ref: '#/components/schemas/UUID' }
+  responses:
+    Error:
+      description: Request rejected. Never contains PII.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    UUID: { type: string, format: uuid }
+    DateTime: { type: string, format: date-time }
+    Grade: { type: integer, enum: [2, 6] }
+    SubjectKey:
+      type: string
+      enum: [english, math, tamil, hindi, science, aadritha, music, physics, chemistry, biology, history_civics, geography, western_violin, carnatic_violin]
+    ThemeKey: { type: string, enum: [puppy, candy, unicorn, school, treat, farm] }
+    AvatarId: { type: string, enum: [fox, dragon, unicorn, rocket, panda, lion, robot, superhero, tiger, astronaut, butterfly, penguin] }
+    AttemptStage: { type: string, enum: [baseline, immediate, delayed] }
+    LessonStatus: { type: string, enum: [draft, in_review, approved, published, archived] }
+    TemplateKey: { type: string, enum: [picture_groups_v1, slides_v1, video_v1, audio_v1, story_v1, quiz_v1] }
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              enum: [unauthorized, forbidden, not_found, validation_failed, conflict, rate_limited, payload_too_large, unsupported_media_type, idempotency_conflict, feature_disabled, internal]
+            message: { type: string, maxLength: 300 }
+            request_id: { type: string, minLength: 1 }
+            details: { type: object, additionalProperties: true }
+
+    # ---------- Identity / pairing ----------
+    ProfilePreferences:
+      type: object
+      properties:
+        music_enabled: { type: boolean, default: true }
+        last_theme_key: { oneOf: [{ $ref: '#/components/schemas/ThemeKey' }, { type: 'null' }] }
+        last_table: { oneOf: [{ type: integer, minimum: 1, maximum: 10 }, { type: 'null' }] }
+    Profile:
+      type: object
+      required: [id, slot, display_name, grade, avatar_id]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        slot: { type: integer, enum: [1, 2] }
+        display_name: { type: string, minLength: 1, maxLength: 30, pattern: '^[^<>\u0000-\u001f\u007f]+$' }
+        grade: { $ref: '#/components/schemas/Grade' }
+        avatar_id: { $ref: '#/components/schemas/AvatarId' }
+        preferences: { $ref: '#/components/schemas/ProfilePreferences' }
+        updated_at: { $ref: '#/components/schemas/DateTime' }
+    PairingCodeResponse:
+      type: object
+      required: [pairing_id, code, poll_secret, expires_at]
+      properties:
+        pairing_id: { $ref: '#/components/schemas/UUID' }
+        code: { type: string, pattern: '^[2-9A-HJKMNP-Z]{8}$' }
+        poll_secret: { type: string, minLength: 32, maxLength: 128 }
+        expires_at: { $ref: '#/components/schemas/DateTime' }
+    DeviceTokenResponse:
+      type: object
+      required: [device_id, household_id, access_token, access_expires_at, refresh_token]
+      properties:
+        device_id: { $ref: '#/components/schemas/UUID' }
+        household_id: { $ref: '#/components/schemas/UUID' }
+        access_token: { type: string }
+        access_expires_at: { $ref: '#/components/schemas/DateTime' }
+        refresh_token: { type: string }
+    Device:
+      type: object
+      required: [id, label, paired_at, last_seen_at, revoked_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        label: { type: string }
+        paired_at: { $ref: '#/components/schemas/DateTime' }
+        last_seen_at: { oneOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] }
+        revoked_at: { oneOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] }
+
+    # ---------- Content ----------
+    LessonSummary:
+      type: object
+      required: [id, version_id, version_no, stable_key, grade, subject_key, topic_id, title, template_key, sort_order]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        version_id: { $ref: '#/components/schemas/UUID' }
+        version_no: { type: integer, minimum: 1 }
+        stable_key: { type: string }
+        grade: { $ref: '#/components/schemas/Grade' }
+        subject_key: { $ref: '#/components/schemas/SubjectKey' }
+        topic_id: { oneOf: [{ $ref: '#/components/schemas/UUID' }, { type: 'null' }] }
+        title: { type: string }
+        template_key: { $ref: '#/components/schemas/TemplateKey' }
+        sort_order: { type: integer }
+    PublishedManifest:
+      type: object
+      required: [revision, checksum, grade, generated_at, subjects]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        checksum: { type: string }
+        grade: { $ref: '#/components/schemas/Grade' }
+        generated_at: { $ref: '#/components/schemas/DateTime' }
+        subjects:
+          type: array
+          items:
+            type: object
+            required: [key, label, playable, topics]
+            properties:
+              key: { $ref: '#/components/schemas/SubjectKey' }
+              label: { type: string }
+              playable: { type: boolean, description: 'false = "Coming soon" stub; never playable without a published lesson' }
+              topics:
+                type: array
+                items:
+                  type: object
+                  required: [id, key, title, lessons]
+                  properties:
+                    id: { $ref: '#/components/schemas/UUID' }
+                    key: { type: string }
+                    title: { type: string }
+                    lessons: { type: array, items: { $ref: '#/components/schemas/LessonSummary' } }
+    LessonContent:
+      type: object
+      required: [contract_version, stable_key, grade, subject_key, topic_key, title, template, config, learning_outcome_keys, rights]
+      properties:
+        contract_version: { const: 1 }
+        stable_key: { type: string, pattern: '^[a-z0-9]+(\.[a-z0-9_-]+)+$' }
+        grade: { $ref: '#/components/schemas/Grade' }
+        subject_key: { $ref: '#/components/schemas/SubjectKey' }
+        topic_key: { type: string, maxLength: 128 }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        template: { $ref: '#/components/schemas/TemplateKey' }
+        config: { type: object, description: Template-specific; picture_groups_v1 => PictureGroupsConfig }
+        learning_outcome_keys: { type: array, minItems: 1, items: { type: string, maxLength: 128 } }
+        rights:
+          type: object
+          required: [type, reviewed]
+          properties:
+            type: { type: string, enum: [original_generated_content, licensed, public_domain, owner_supplied] }
+            reviewed: { type: boolean }
+            attribution: { type: string, maxLength: 500 }
+    PictureGroupsConfig:
+      type: object
+      required: [factor, themes]
+      properties:
+        factor: { type: integer, minimum: 1, maximum: 10 }
+        count_from: { type: integer, minimum: 1, maximum: 10, default: 1 }
+        count_to: { type: integer, minimum: 1, maximum: 10, default: 10 }
+        themes: { type: array, minItems: 1, maxItems: 6, items: { $ref: '#/components/schemas/ThemeKey' } }
+        seconds_per_slide: { type: integer, minimum: 3, maximum: 30, default: 7 }
+        quiz_question_count: { type: integer, minimum: 1, maximum: 10, default: 3 }
+    PublishedLesson:
+      type: object
+      description: Approved immutable content. Never includes answer keys or draft fields.
+      required: [id, version_id, version_no, checksum, published_at, content]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        version_id: { $ref: '#/components/schemas/UUID' }
+        version_no: { type: integer, minimum: 1 }
+        checksum: { type: string }
+        published_at: { $ref: '#/components/schemas/DateTime' }
+        content: { $ref: '#/components/schemas/LessonContent' }
+
+    # ---------- Telemetry ----------
+    LearningEvent: {"type": "object", "additionalProperties": false, "required": ["event_id", "schema_version", "event_type", "occurred_at", "sent_at", "client_session_id", "client_sequence", "learner_id", "device_id", "payload"], "properties": {"event_id": {"type": "string", "format": "uuid"}, "schema_version": {"const": 1}, "event_type": {"enum": ["app_opened", "profile_selected", "session_started", "lesson_started", "slide_entered", "slide_exited", "playback_paused", "playback_resumed", "playback_heartbeat", "quiz_started", "answer_submitted", "quiz_completed", "lesson_completed", "session_ended", "app_hidden", "sync_failed", "sync_succeeded"]}, "occurred_at": {"type": "string", "format": "date-time"}, "sent_at": {"type": "string", "format": "date-time"}, "client_session_id": {"type": "string", "format": "uuid"}, "client_sequence": {"type": "integer", "minimum": 0}, "learner_id": {"type": "string", "format": "uuid"}, "device_id": {"type": "string", "format": "uuid"}, "lesson_id": {"type": "string", "format": "uuid"}, "lesson_version_id": {"type": "string", "format": "uuid"}, "slide_id": {"type": "string", "maxLength": 128}, "payload": {"type": "object", "additionalProperties": false, "properties": {"foreground": {"type": "boolean"}, "playing": {"type": "boolean"}, "visible_ms": {"type": "integer", "minimum": 0, "maximum": 30000}, "playback_ms": {"type": "integer", "minimum": 0, "maximum": 30000}, "theme_key": {"enum": ["puppy", "candy", "unicorn", "school", "treat", "farm"]}, "slide_index": {"type": "integer", "minimum": 1, "maximum": 50}, "quiz_attempt_id": {"type": "string", "format": "uuid"}, "attempt_stage": {"enum": ["baseline", "immediate", "delayed"]}, "question_version_key": {"type": "string", "maxLength": 128}, "selected_option_id": {"type": "string", "maxLength": 128}, "reason_code": {"type": "string", "maxLength": 64, "pattern": "^[a-z0-9_]+$"}}}}, "description": "Inlined copy of schemas/learning-event-v1.schema.json; contract tests assert they are identical."}
+    TelemetryAck:
+      type: object
+      required: [accepted, duplicates, rejected]
+      properties:
+        accepted: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+        duplicates: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [event_id, code]
+            properties:
+              event_id: { oneOf: [{ $ref: '#/components/schemas/UUID' }, { type: 'null' }] }
+              code: { type: string, enum: [schema_invalid, learner_not_in_household, device_mismatch, clock_skew_future, too_old, duration_out_of_range, lesson_unknown, sequence_regression] }
+
+    # ---------- Progress ----------
+    ProgressSyncRequest:
+      type: object
+      required: [learner_id, lesson_id, theme_key, attempt_id, client_revision, base_server_revision, completed, client_updated_at]
+      properties:
+        learner_id: { $ref: '#/components/schemas/UUID' }
+        lesson_id: { $ref: '#/components/schemas/UUID' }
+        lesson_version_id: { $ref: '#/components/schemas/UUID' }
+        theme_key: { $ref: '#/components/schemas/ThemeKey' }
+        attempt_id: { $ref: '#/components/schemas/UUID' }
+        client_revision: { type: integer, minimum: 0 }
+        base_server_revision: { oneOf: [{ type: integer, minimum: 0 }, { type: 'null' }] }
+        slide_id: { type: string, maxLength: 128 }
+        position_seconds: { type: number, minimum: 0, maximum: 30 }
+        completed: { type: boolean }
+        client_updated_at: { $ref: '#/components/schemas/DateTime' }
+    ProgressState:
+      type: object
+      required: [learner_id, lesson_id, lesson_version_id, theme_key, attempt_id, slide_id, position_seconds, completed, server_revision, updated_at]
+      properties:
+        learner_id: { $ref: '#/components/schemas/UUID' }
+        lesson_id: { $ref: '#/components/schemas/UUID' }
+        lesson_version_id: { oneOf: [{ $ref: '#/components/schemas/UUID' }, { type: 'null' }] }
+        theme_key: { $ref: '#/components/schemas/ThemeKey' }
+        attempt_id: { $ref: '#/components/schemas/UUID' }
+        slide_id: { oneOf: [{ type: string }, { type: 'null' }] }
+        position_seconds: { type: number }
+        completed: { type: boolean }
+        server_revision: { type: integer, minimum: 1 }
+        updated_at: { $ref: '#/components/schemas/DateTime' }
+    ProgressSyncResponse:
+      type: object
+      required: [outcome, state]
+      properties:
+        outcome: { type: string, enum: [applied, merged, stale_ignored] }
+        state: { $ref: '#/components/schemas/ProgressState' }
+    LegacyImportRequest:
+      type: object
+      required: [migration_run_id, legacy_fingerprint, raw, profile_mapping]
+      properties:
+        migration_run_id: { $ref: '#/components/schemas/UUID' }
+        legacy_fingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+        raw:
+          type: object
+          required: [breaknlearn.profiles.v1, breaknlearn.progress.v1, learnbreak-x3-v4-progress]
+          properties:
+            breaknlearn.profiles.v1: { oneOf: [{ type: object }, { type: 'null' }] }
+            breaknlearn.progress.v1: {}
+            learnbreak-x3-v4-progress: {}
+        profile_mapping:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [local_profile_id, learner_id]
+            properties:
+              local_profile_id: { type: string, maxLength: 40 }
+              learner_id: { $ref: '#/components/schemas/UUID' }
+    LegacyImportReceipt:
+      type: object
+      required: [migration_run_id, outcome, per_profile]
+      properties:
+        migration_run_id: { $ref: '#/components/schemas/UUID' }
+        outcome: { type: string, enum: [imported, already_imported] }
+        per_profile:
+          type: array
+          items:
+            type: object
+            required: [local_profile_id, learner_id, entries_imported, entries_skipped_newer_on_server, entries_unrecognized]
+            properties:
+              local_profile_id: { type: string }
+              learner_id: { $ref: '#/components/schemas/UUID' }
+              entries_imported: { type: integer, minimum: 0 }
+              entries_skipped_newer_on_server: { type: integer, minimum: 0 }
+              entries_unrecognized: { type: integer, minimum: 0 }
+
+    # ---------- Assessments ----------
+    QuizOption:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 64 }
+        label: { type: string, maxLength: 200 }
+    StartAssessmentResponse:
+      type: object
+      required: [attempt_id, stage, lesson_version_id, seed, questions, status]
+      properties:
+        attempt_id: { $ref: '#/components/schemas/UUID' }
+        stage: { $ref: '#/components/schemas/AttemptStage' }
+        lesson_version_id: { $ref: '#/components/schemas/UUID' }
+        seed: { type: string }
+        status: { type: string, enum: [ready, insufficient_items] }
+        questions:
+          type: array
+          items:
+            type: object
+            required: [question_version_key, prompt, options]
+            properties:
+              question_version_key: { type: string }
+              prompt: { type: string }
+              visual:
+                type: object
+                properties:
+                  group_count: { type: integer }
+                  objects_per_group: { type: integer }
+                  theme_key: { type: string }
+              options: { type: array, items: { $ref: '#/components/schemas/QuizOption' } }
+    SubmitAnswerResponse:
+      type: object
+      required: [correct, correct_option_id, feedback_code, already_answered]
+      properties:
+        correct: { type: boolean }
+        correct_option_id: { type: string }
+        feedback_code: { type: string, enum: [amazing, good_try] }
+        already_answered: { type: boolean }
+
+    # ---------- Scores ----------
+    LearningScore:
+      type: object
+      required: [learner_id, topic_id, score, status, confidence, components, coverage_pct, weights_version, questions_count, confidence_note, limitation, computed_at]
+      properties:
+        learner_id: { $ref: '#/components/schemas/UUID' }
+        topic_id: { oneOf: [{ $ref: '#/components/schemas/UUID' }, { type: 'null' }] }
+        score: { oneOf: [{ type: number, minimum: 0, maximum: 100 }, { type: 'null' }] }
+        status: { type: string, enum: [provisional, evidence_sufficient, insufficient_evidence] }
+        confidence: { type: string, enum: [low, adequate] }
+        components:
+          type: object
+          required: [M, R, I, C]
+          properties:
+            M: { oneOf: [{ type: number, minimum: 0, maximum: 100 }, { type: 'null' }] }
+            R: { oneOf: [{ type: number, minimum: 0, maximum: 100 }, { type: 'null' }] }
+            I: { oneOf: [{ type: number, minimum: 0, maximum: 100 }, { type: 'null' }] }
+            C: { oneOf: [{ type: number, minimum: 0, maximum: 100 }, { type: 'null' }] }
+        coverage_pct: { type: number, minimum: 0, maximum: 100 }
+        weights_version: { type: string }
+        questions_count: { type: integer, minimum: 0 }
+        confidence_note: { type: string }
+        limitation: { type: string }
+        computed_at: { $ref: '#/components/schemas/DateTime' }
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service ready
+          content: { application/json: { schema: { type: object, required: [status], properties: { status: { const: ok }, version: { type: string } } } } }
+
+  # ---------------- Pairing (M01) ----------------
+  /devices/pairing-code:
+    post:
+      tags: [Pairing]
+      operationId: createPairingCode
+      description: Unauthenticated, rate-limited per IP. Code is single-use, TTL 10 minutes. Only the code hash is stored.
+      responses:
+        '201': { description: Code to display on TV, content: { application/json: { schema: { $ref: '#/components/schemas/PairingCodeResponse' } } } }
+        '429': { $ref: '#/components/responses/Error' }
+  /devices/pair:
+    post:
+      tags: [Pairing]
+      operationId: approvePairing
+      security: [{ AdultSession: [] }]
+      description: Owner/guardian approves the code shown on the TV for their household.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code, device_label], properties: { code: { type: string }, device_label: { type: string, maxLength: 40 } } } } }
+      responses:
+        '200': { description: Approved; TV may now redeem, content: { application/json: { schema: { type: object, required: [device_id], properties: { device_id: { $ref: '#/components/schemas/UUID' } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /devices/token:
+    post:
+      tags: [Pairing]
+      operationId: redeemDeviceToken
+      description: TV polls with pairing_id + poll_secret. 202 while pending; 200 once approved (one-time).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [pairing_id, poll_secret], properties: { pairing_id: { $ref: '#/components/schemas/UUID' }, poll_secret: { type: string } } } } }
+      responses:
+        '200': { description: Device credential, content: { application/json: { schema: { $ref: '#/components/schemas/DeviceTokenResponse' } } } }
+        '202': { description: Not yet approved }
+        '410': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /devices/token/refresh:
+    post:
+      tags: [Pairing]
+      operationId: refreshDeviceToken
+      description: Rotates the refresh token; old refresh token becomes invalid. Fails for revoked devices.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [refresh_token], properties: { refresh_token: { type: string } } } } }
+      responses:
+        '200': { description: New credential, content: { application/json: { schema: { $ref: '#/components/schemas/DeviceTokenResponse' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+  /devices:
+    get:
+      tags: [Pairing]
+      operationId: listDevices
+      security: [{ AdultSession: [] }]
+      responses:
+        '200': { description: Devices in caller household, content: { application/json: { schema: { type: object, required: [devices], properties: { devices: { type: array, items: { $ref: '#/components/schemas/Device' } } } } } } }
+  /devices/{deviceId}/revoke:
+    post:
+      tags: [Pairing]
+      operationId: revokeDevice
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: path, name: deviceId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: Revoked; token_version bumped }
+        '403': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Learners ----------------
+  /profiles:
+    get:
+      tags: [Learners]
+      operationId: listProfiles
+      security: [{ DeviceToken: [] }, { AdultSession: [] }]
+      responses:
+        '200': { description: Profiles in caller household (max 2), content: { application/json: { schema: { type: object, required: [profiles], properties: { profiles: { type: array, maxItems: 2, items: { $ref: '#/components/schemas/Profile' } } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Learners]
+      operationId: upsertProfile
+      security: [{ DeviceToken: [] }, { AdultSession: [] }]
+      description: Household derived from credential; a submitted id outside the household is 403.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Content (M05) ----------------
+  /catalog/manifest:
+    get:
+      tags: [Content]
+      operationId: getPublishedManifest
+      description: PUBLIC_PUBLISHED. Only published lessons. Supports If-None-Match.
+      parameters: [{ $ref: '#/components/parameters/Grade' }]
+      responses:
+        '200':
+          description: Current manifest
+          headers: { ETag: { schema: { type: string } }, Cache-Control: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/PublishedManifest' } } }
+        '304': { description: Not modified }
+  /catalog/lessons/{lessonId}:
+    get:
+      tags: [Content]
+      operationId: getPublishedLesson
+      parameters: [{ $ref: '#/components/parameters/LessonId' }]
+      responses:
+        '200': { description: Published lesson, content: { application/json: { schema: { $ref: '#/components/schemas/PublishedLesson' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Telemetry (M07) ----------------
+  /telemetry/batch:
+    post:
+      tags: [Telemetry]
+      operationId: ingestEvents
+      security: [{ DeviceToken: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/LearningEvent' } }
+      responses:
+        '200': { description: Per-event acknowledgement, content: { application/json: { schema: { $ref: '#/components/schemas/TelemetryAck' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Progress (M09) ----------------
+  /progress:
+    get:
+      tags: [Progress]
+      operationId: listProgress
+      security: [{ DeviceToken: [] }, { AdultSession: [] }]
+      parameters:
+        - { in: query, name: learner_id, required: true, schema: { $ref: '#/components/schemas/UUID' } }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Canonical progress, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/ProgressState' } }, next_cursor: { oneOf: [{ type: string }, { type: 'null' }] } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+  /progress/sync:
+    post:
+      tags: [Progress]
+      operationId: syncLearnerProgress
+      security: [{ DeviceToken: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressSyncRequest' } } } }
+      responses:
+        '200': { description: Canonical state, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressSyncResponse' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /progress/legacy-import:
+    post:
+      tags: [Progress]
+      operationId: importLegacyProgress
+      security: [{ DeviceToken: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      description: Idempotent by (migration_run_id, legacy_fingerprint). Never overwrites newer server completion; never fabricates sessions or scores.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LegacyImportRequest' } } } }
+      responses:
+        '200': { description: Receipt, content: { application/json: { schema: { $ref: '#/components/schemas/LegacyImportReceipt' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Assessments (M08) ----------------
+  /assessments/start:
+    post:
+      tags: [Assessments]
+      operationId: startAssessment
+      security: [{ DeviceToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [learner_id, lesson_id, stage, client_attempt_id], properties: { learner_id: { $ref: '#/components/schemas/UUID' }, lesson_id: { $ref: '#/components/schemas/UUID' }, stage: { $ref: '#/components/schemas/AttemptStage' }, client_attempt_id: { $ref: '#/components/schemas/UUID' } } } } }
+      responses:
+        '201': { description: Questions without answer keys, content: { application/json: { schema: { $ref: '#/components/schemas/StartAssessmentResponse' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+  /assessments/{attemptId}/answers:
+    post:
+      tags: [Assessments]
+      operationId: submitAnswer
+      security: [{ DeviceToken: [] }]
+      parameters: [{ in: path, name: attemptId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [question_version_key, selected_option_id], properties: { question_version_key: { type: string, maxLength: 128 }, selected_option_id: { type: string, maxLength: 128 }, response_ms: { type: integer, minimum: 0, maximum: 600000 } } } } }
+      responses:
+        '200': { description: Server-scored, content: { application/json: { schema: { $ref: '#/components/schemas/SubmitAnswerResponse' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /assessments/{attemptId}/finish:
+    post:
+      tags: [Assessments]
+      operationId: finishAssessment
+      security: [{ DeviceToken: [] }]
+      parameters: [{ in: path, name: attemptId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: Totals and next review date, content: { application/json: { schema: { type: object, required: [attempt_id, total_questions, correct_questions, next_review_due_at], properties: { attempt_id: { $ref: '#/components/schemas/UUID' }, total_questions: { type: integer }, correct_questions: { type: integer }, next_review_due_at: { oneOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] } } } } } }
+  /assessments/due:
+    get:
+      tags: [Assessments]
+      operationId: listDueReviews
+      security: [{ DeviceToken: [] }]
+      parameters: [{ in: query, name: learner_id, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: 'Gentle, optional delayed reviews that are due' }
+
+  # ---------------- Admin: identity ----------------
+  /admin/me:
+    get:
+      tags: [Admin]
+      operationId: getMe
+      security: [{ AdultSession: [] }]
+      responses:
+        '200': { description: 'Caller identity, household roles and staff roles' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Admin: curriculum (M02/M03) ----------------
+  /admin/curriculum:
+    get:
+      tags: [Admin]
+      operationId: listCurriculum
+      security: [{ AdultSession: [] }]
+      parameters:
+        - { in: query, name: grade, schema: { $ref: '#/components/schemas/Grade' } }
+        - { in: query, name: subject_key, schema: { $ref: '#/components/schemas/SubjectKey' } }
+        - { in: query, name: review_status, schema: { type: string, enum: [draft, in_review, verified, archived] } }
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Curriculum nodes with authority and review state }
+        '401': { $ref: '#/components/responses/Error' }
+  /admin/curriculum/{nodeId}/review:
+    post:
+      tags: [Admin]
+      operationId: reviewCurriculumNode
+      security: [{ AdultSession: [] }]
+      description: Reviewer only. verify requires source_document_id + source_ref (page/section).
+      parameters: [{ in: path, name: nodeId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: Updated and audited }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /admin/school-plans:
+    post:
+      tags: [Admin]
+      operationId: createSchoolPlan
+      security: [{ AdultSession: [] }]
+      responses: { '201': { description: Created }, '403': { $ref: '#/components/responses/Error' } }
+  /admin/imports:
+    post:
+      tags: [Admin]
+      operationId: importSchoolSyllabus
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      description: multipart/form-data (file + school_plan_id) or JSON (pasted TOC). PDF/DOCX/CSV, <= IMPORT_MAX_MB, MIME + magic check. Stored privately.
+      responses:
+        '202': { description: Queued import job, content: { application/json: { schema: { type: object, required: [job_id], properties: { job_id: { $ref: '#/components/schemas/UUID' }, duplicate_of: { oneOf: [{ $ref: '#/components/schemas/UUID' }, { type: 'null' }] } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+  /admin/imports/{jobId}:
+    get:
+      tags: [Admin]
+      operationId: getImportJob
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: path, name: jobId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses: { '200': { description: 'Staged chapters, suggestions and row-level errors' } }
+  /admin/imports/{jobId}/review:
+    post:
+      tags: [Admin]
+      operationId: reviewSchoolMapping
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: path, name: jobId, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: Decisions recorded with reviewer id/time; nothing is published }
+        '403': { $ref: '#/components/responses/Error' }
+
+  # ---------------- Admin: lessons & publishing (M04/M05) ----------------
+  /admin/lessons:
+    get:
+      tags: [Admin]
+      operationId: listLessons
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Lessons with latest version status } }
+    post:
+      tags: [Admin]
+      operationId: saveDraftLesson
+      security: [{ AdultSession: [] }]
+      description: Editor+. Creates the lesson if lesson_id absent, else a new draft version. Invalid drafts save with validation_errors but cannot be submitted.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [content], properties: { lesson_id: { $ref: '#/components/schemas/UUID' }, content: { $ref: '#/components/schemas/LessonContent' } } } } } }
+      responses:
+        '201': { description: Draft version saved }
+        '403': { $ref: '#/components/responses/Error' }
+  /admin/lessons/{lessonId}:
+    get:
+      tags: [Admin]
+      operationId: getLesson
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/LessonId' }]
+      responses: { '200': { description: Lesson with all versions and publication history } }
+  /admin/lessons/{lessonId}/versions/{versionId}/preview:
+    get:
+      tags: [Admin]
+      operationId: previewLessonVersion
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/LessonId' }, { $ref: '#/components/parameters/VersionId' }]
+      responses: { '200': { description: Rendered slide JSON plus validation errors } }
+  /admin/lessons/{lessonId}/versions/{versionId}/transition:
+    post:
+      tags: [Admin]
+      operationId: transitionLessonVersion
+      security: [{ AdultSession: [] }]
+      description: submit (editor, valid drafts only) | approve/reject (reviewer; not the author). Audited.
+      parameters: [{ $ref: '#/components/parameters/LessonId' }, { $ref: '#/components/parameters/VersionId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [action], properties: { action: { type: string, enum: [submit, approve, reject] }, comment: { type: string, maxLength: 1000 } } } } } }
+      responses:
+        '200': { description: New status }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/lessons/{lessonId}/publish:
+    post:
+      tags: [Admin]
+      operationId: publishApprovedLesson
+      security: [{ AdultSession: [] }]
+      description: 'Publisher only. Approved version required. One transaction: publication record + audit + manifest revision.'
+      parameters: [{ $ref: '#/components/parameters/LessonId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [version_id, reason], properties: { version_id: { $ref: '#/components/schemas/UUID' }, reason: { type: string, maxLength: 500 } } } } } }
+      responses:
+        '200': { description: New manifest revision, content: { application/json: { schema: { type: object, required: [manifest_revision, published_at], properties: { manifest_revision: { type: integer }, published_at: { $ref: '#/components/schemas/DateTime' } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/lessons/{lessonId}/unpublish:
+    post:
+      tags: [Admin]
+      operationId: unpublishLesson
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/LessonId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: New manifest revision without the lesson }, '403': { $ref: '#/components/responses/Error' } }
+  /admin/manifests/{revision}/pin:
+    post:
+      tags: [Admin]
+      operationId: pinManifest
+      security: [{ AdultSession: [] }]
+      description: Publisher only. Emergency rollback - re-serve a previous manifest revision as current (new revision row copying it).
+      parameters: [{ in: path, name: revision, required: true, schema: { type: integer, minimum: 1 } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Pinned }, '403': { $ref: '#/components/responses/Error' } }
+  /admin/media:
+    post:
+      tags: [Admin]
+      operationId: uploadMedia
+      security: [{ AdultSession: [] }]
+      description: Editor+. Image/audio with rights_status and alt text/caption required.
+      responses: { '201': { description: Media asset }, '413': { $ref: '#/components/responses/Error' }, '415': { $ref: '#/components/responses/Error' } }
+
+  # ---------------- Admin: analytics (M10/M11) ----------------
+  /admin/analytics/summary:
+    get:
+      tags: [Admin]
+      operationId: getAnalyticsSummary
+      security: [{ AdultSession: [] }]
+      description: Guardian/owner of the household only. Separates playback_ms, foreground_estimated_ms and interaction_count.
+      parameters:
+        - { in: query, name: learner_id, schema: { $ref: '#/components/schemas/UUID' } }
+        - { in: query, name: subject_key, schema: { $ref: '#/components/schemas/SubjectKey' } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses: { '200': { description: Household-scoped summary }, '403': { $ref: '#/components/responses/Error' } }
+  /admin/analytics/learning-scores:
+    get:
+      tags: [Admin]
+      operationId: getLearningScores
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: query, name: learner_id, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses:
+        '200': { description: ELS per topic, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/LearningScore' } } } } } } }
+  /admin/analytics/content-quality:
+    get:
+      tags: [Admin]
+      operationId: getContentQuality
+      security: [{ AdultSession: [] }]
+      description: Editor/reviewer/analyst. Aggregated, small-cohort suppressed, observational only; no child-level rows.
+      responses: { '200': { description: Per lesson-version aggregates } }
+  /admin/recommendations:
+    get:
+      tags: [Admin]
+      operationId: listRecommendations
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: query, name: learner_id, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses: { '200': { description: Recommendations with reason codes } }
+  /admin/recommendations/{id}/dismiss:
+    post:
+      tags: [Admin]
+      operationId: dismissRecommendation
+      security: [{ AdultSession: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { $ref: '#/components/schemas/UUID' } }]
+      responses: { '200': { description: Dismissed (reversible) } }
+  /admin/audit:
+    get:
+      tags: [Admin]
+      operationId: listAuditTrail
+      security: [{ AdultSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: 'Redacted, role-scoped audit entries' } }
+
+  # ---------------- Household privacy ----------------
+  /admin/consent:
+    post:
+      tags: [Household]
+      operationId: recordConsent
+      security: [{ AdultSession: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [consent_version, decision], properties: { consent_version: { type: string }, decision: { type: string, enum: [grant, revoke] } } } } } }
+      responses: { '200': { description: Recorded } }
+  /admin/export:
+    get:
+      tags: [Household]
+      operationId: exportHouseholdData
+      security: [{ AdultSession: [] }]
+      description: Owner/guardian. Own household only; audited; not CDN cached.
+      responses: { '200': { description: JSON/CSV export } }
+  /admin/deletion-requests:
+    post:
+      tags: [Household]
+      operationId: requestDeletion
+      security: [{ AdultSession: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [scope], properties: { scope: { type: string, enum: [learner, household, raw_telemetry] }, learner_id: { $ref: '#/components/schemas/UUID' } } } } } }
+      responses: { '202': { description: Deletion queued and audited } }
