@@ -73,6 +73,12 @@ describe("student co-hosting (ADR-0006)", () => {
       beforeFiles: [
         { source: "/", destination: "/index.html" },
         { source: "/prototype", destination: "/prototype/index.html" },
+        { source: "/demo", destination: "/prototype/demo.html" },
+        { source: "/demo/teacher", destination: "/prototype/teacher.html" },
+        { source: "/demo/child", destination: "/prototype/child.html" },
+        { source: "/demo/growth", destination: "/prototype/growth.html" },
+        { source: "/demo/class", destination: "/prototype/class.html" },
+        { source: "/demo/privacy", destination: "/prototype/privacy.html" },
       ],
     });
   });

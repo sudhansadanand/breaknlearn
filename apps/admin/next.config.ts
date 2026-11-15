@@ -5,6 +5,9 @@
  */
 import type { NextConfig } from "next";
 
+/** School demo pages served at /demo/<page> from apps/prototype/<page>.html. */
+const DEMO_PAGES = ["teacher", "child", "growth", "class", "privacy"] as const;
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
@@ -29,6 +32,9 @@ const nextConfig: NextConfig = {
         { source: "/", destination: "/index.html" },
         // Concept prototype (static, no data): see apps/prototype.
         { source: "/prototype", destination: "/prototype/index.html" },
+        // School demo (static, fictional data, no ribbon): see apps/prototype/demo.html.
+        { source: "/demo", destination: "/prototype/demo.html" },
+        ...DEMO_PAGES.map((page) => ({ source: `/demo/${page}`, destination: `/prototype/${page}.html` })),
       ],
     };
   },
