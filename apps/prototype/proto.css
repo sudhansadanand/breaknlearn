@@ -66,3 +66,4 @@ button.ghost{background:transparent;border:2px solid #7c6aa3}
 input.text{width:100%;padding:14px 18px;border-radius:14px;border:2px solid #b6a6d6;font-size:20px;min-height:60px}
 .hint{font-size:15px;color:#cbbfe3;text-align:center;margin-top:14px}
 .hidden{display:none}
+.card ol{margin:6px 0 14px;padding-left:28px}.card ol li{color:#3a2d55;font-size:clamp(17px,1.5vw,23px);line-height:1.5}

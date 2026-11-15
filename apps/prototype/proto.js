@@ -19,7 +19,7 @@
     explorer: { name: "Getting it", detail: "Bigger numbers and word problems" }
   };
 
-  var state = { world: WORLDS[5], level: "starter", voice: true, screen: "home", parentQuestions: [] };
+  var state = { world: WORLDS[5], level: "starter", voice: true, screen: "home", parentQuestions: [], missions: [] };
   var timers = [];
   var app = document.getElementById("app");
 
@@ -148,6 +148,7 @@
       ["learn", "💡", "Learn", "How sharing equally works, step by step"],
       ["story", "📜", "Story", "Surprising facts and history of ÷"],
       ["game", "🎮", "Game", "Quick quizzes that adapt to you"],
+      ["tryit", "🧺", "Try it", "Real-world missions at home"],
       ["watch", "📺", "Watch", "A short episode with a 60-second break"],
       ["match", "🏏", "Family match night", "Everyone plays, cricket style"],
       ["parents", "👪", "For parents", "This week at school + dinner questions"]
@@ -301,6 +302,95 @@
     next();
   };
 
+  // ----- Try it (real-world missions) -----
+  var MISSIONS = {
+    starter: [
+      { key: "roti", place: "Kitchen", icon: "🫓", title: "Roti share", item: "🫓", who: "🍽️", setup: "Help set the table for dinner.", steps: ["Count out 6 rotis (or 6 paper circles).", "Put out 3 plates.", "Deal the rotis one at a time onto the plates, like a card dealer.", "Count how many are on each plate."], a: 6, b: 3, q: 2, ask: "How many rotis on each plate?", recall: "Remember your Roti share mission? 6 rotis on 3 plates. How many on each?" },
+      { key: "socks", place: "Bedroom", icon: "🧦", title: "Sock pairs", item: "🧦", who: "👣", setup: "Laundry helper time!", steps: ["Find 10 socks from the clean laundry.", "Match them into pairs of 2.", "Count the pairs."], a: 10, b: 2, q: 5, pairs: true, ask: "How many pairs did 10 socks make?", recall: "Remember the Sock pairs mission? 10 socks in pairs. How many pairs?" },
+      { key: "diya", place: "Festival", icon: "🪔", title: "Diya rows", item: "🪔", who: "▫️", setup: "Get ready for Diwali (cups or bottle caps work too).", steps: ["Take 12 diyas.", "Make 3 equal rows.", "Count how many are in each row."], a: 12, b: 3, q: 4, ask: "How many diyas in each row?", recall: "Remember the Diya rows mission? 12 diyas in 3 equal rows. How many in each?" }
+    ],
+    explorer: [
+      { key: "ladoo", place: "Kitchen", icon: "🟠", title: "Ladoo share", item: "🟠", who: "🧑", setup: "Sweets after dinner, shared fairly.", steps: ["Take 14 ladoos (or 14 biscuits).", "Share them equally among 4 people at home.", "How many each? Is anything left over?"], a: 12, b: 4, q: 3, left: 2, ask: "14 ladoos among 4 people: how many does each get?", recall: "Remember the Ladoo share? 14 ladoos among 4 people. How many each?" },
+      { key: "shop", place: "Market", icon: "🛒", title: "Best buy", item: "🍪", who: "📦", setup: "Next time you're at the shop with a grown-up.", steps: ["Find a pack of 4 biscuits for ₹40.", "Work out the price of one biscuit in the pack.", "A single biscuit costs ₹12. Which is the better deal?"], a: 40, b: 4, q: 10, money: true, ask: "₹40 for 4 biscuits: how much is one?", recall: "Remember Best buy? ₹40 for 4 biscuits. How much is one?" },
+      { key: "runrate", place: "Cricket", icon: "🏏", title: "Run rate", item: "🏏", who: "⏱️", setup: "Watch a match with the family.", steps: ["The team needs 48 runs in 8 overs.", "Work out how many runs they need each over.", "Watch the next over: did they get it?"], a: 48, b: 8, q: 6, ask: "48 runs in 8 overs: how many runs per over?", recall: "Remember the Run rate mission? 48 runs in 8 overs. How many per over?" }
+    ]
+  };
+  function missionQn(m) {
+    var opts = [m.q], c = shuffle([m.q + 1, m.q - 1, m.q + 2, m.q * 2, m.q + 3]);
+    for (var i = 0; i < c.length && opts.length < 4; i++) { if (c[i] > 0 && opts.indexOf(c[i]) < 0) { opts.push(c[i]); } }
+    return { a: m.a, b: m.b, q: m.q, text: m.ask, pics: false, options: shuffle(opts), money: !!m.money };
+  }
+  function missionPicture(m) {
+    var cur = m.money ? "₹" : "";
+    if (m.money || m.a > 24) { return "<p>" + cur + m.a + " ÷ " + m.b + " = " + cur + m.q + ", because " + m.b + " × " + m.q + " = " + m.a + ".</p>"; }
+    var g = '<div class="groups">', n = m.pairs ? m.q : m.b, per = m.pairs ? m.b : m.q;
+    for (var i = 0; i < n; i++) { g += '<div class="group pop"><div class="who">' + m.who + "</div>" + rep(m.item, per) + "</div>"; }
+    g += "</div>";
+    if (m.pairs) { return g + "<p>" + m.a + " socks in pairs of 2 make " + m.q + " pairs. So " + m.a + " ÷ 2 = " + m.q + ".</p>"; }
+    if (m.left) { return g.slice(0, -6) + '<div class="group pop"><div class="who">❓</div>' + rep(m.item, m.left) + "</div></div><p>" + m.b + " equal groups of " + m.q + " use " + m.a + ", with " + m.left + " left over. So " + (m.a + m.left) + " ÷ " + m.b + " = " + m.q + " remainder " + m.left + ".</p>"; }
+    return g + "<p>" + m.b + " equal groups of " + m.q + " make " + m.a + ". So " + m.a + " ÷ " + m.b + " = " + m.q + ".</p>";
+  }
+  SCREENS.tryit = function () {
+    var list = MISSIONS[state.level === "explorer" ? "explorer" : "starter"];
+    function choose() {
+      var h = "";
+      for (var i = 0; i < list.length; i++) {
+        var done = state.missions.indexOf(list[i]) >= 0;
+        h += '<button class="tile" data-m="' + i + '"' + (i === 0 ? " data-first" : "") + '><span class="big">' + list[i].icon + "</span>" + esc(list[i].title) + (done ? " ✅" : "") + "<small>" + esc(list[i].place + " · " + list[i].setup) + "</small></button>";
+      }
+      el(topBar("Try it · real-world missions") + "<p>÷ is everywhere at home. Pick a mission, do it with someone at home, then come back and tell us what you found.</p>" +
+        '<div class="grid">' + h + "</div>" +
+        '<p class="note">In the real app, missions come from what the teacher taught this week and from your family’s own life (your city, festivals, sports, who’s at home), and a person checks every mission for safety first.</p>');
+      wireTop();
+      speak("Try it! Division is everywhere at home. Pick a mission.");
+      var ts = app.querySelectorAll(".tile");
+      for (var j = 0; j < ts.length; j++) { ts[j].onclick = function () { card(list[Number(this.getAttribute("data-m"))]); }; }
+    }
+    function card(m) {
+      var st = "";
+      for (var i = 0; i < m.steps.length; i++) { st += "<li>" + esc(m.steps[i]) + "</li>"; }
+      el(topBar("Mission · " + m.title) + '<div class="card"><div class="eyebrow">' + esc(m.icon + " " + m.place + " mission") + "</div><h2>" + esc(m.title) + "</h2><p><b>" + esc(m.setup) + "</b></p><ol>" + st + "</ol>" +
+        "<p><b>Do it with:</b> a parent, a grandparent, a brother or sister, or on your own.</p>" +
+        '<p class="note">Safe by design: no stoves or knives, and never going out alone. No photos or videos of children are needed.</p>' +
+        '<div class="row"><button id="did" class="primary" data-first>We did it! Tell BreakNLearn →</button><button id="other" class="soft">Pick another mission</button></div></div>');
+      wireTop();
+      speak(m.title + ". " + m.setup + " " + m.steps.join(" "));
+      on("did", function () { tell(m); });
+      on("other", choose);
+    }
+    function tell(m) {
+      var qn = missionQn(m);
+      el(topBar("Tell it · " + m.title) + '<div class="panel"><div class="question">' + esc(m.ask) + "</div>" + optionsHtml(qn) + '<div id="fb" class="feedback"></div><div id="more"></div></div>');
+      wireTop();
+      speak(m.ask);
+      wireOptions(qn, function (ok) {
+        byId("fb").className = "feedback " + (ok ? "good" : "bad");
+        byId("fb").innerHTML = ok ? "⭐ That’s it! You used ÷ in real life." : "Let’s check it together.";
+        speak(ok ? "That's it! You used division in real life." : "Let's check it together.");
+        var extra = m.left ? "<p><b>" + m.left + " left over!</b> That’s called the <b>remainder</b>. Who should get the last " + m.left + "? Decide as a family.</p>" : "";
+        if (m.key === "shop") { extra = "<p>One biscuit in the pack costs ₹10, a single costs ₹12. <b>The pack is the better deal.</b></p>"; }
+        byId("more").innerHTML = missionPicture(m) + extra +
+          '<div class="row"><span class="chip">Who helped?</span><button class="soft helper">🧑 Parent</button><button class="soft helper">🧓 Grandparent</button><button class="soft helper">🧒 Sibling</button><button class="soft helper">🙋 On my own</button></div>';
+        var hs = app.querySelectorAll(".helper");
+        for (var i = 0; i < hs.length; i++) { hs[i].onclick = function () { saved(m, this.innerHTML); }; }
+        hs[0].focus();
+      });
+    }
+    function saved(m, helper) {
+      if (state.missions.indexOf(m) < 0) { state.missions.push(m); }
+      el(topBar("Mission complete") + '<div class="panel" style="text-align:center"><div class="factart">🏅</div><h2>' + esc(m.title) + " done · " + helper + "</h2>" +
+        "<p>Your mission becomes a question at the next <b>family match night</b>: “" + esc(m.recall) + "”</p>" +
+        '<p class="note">This is how we see real understanding: using ÷ in a new place, outside the app. Parents see it in the weekly growth story.</p>' +
+        '<div class="row" style="justify-content:center"><button id="more2" class="primary" data-first>Another mission</button><button id="match2">Play match night →</button><button id="hub2" class="soft">Back to modes</button></div></div>');
+      wireTop();
+      speak("Mission complete! It will be a question at the next family match night.");
+      on("more2", choose);
+      on("match2", function () { go("match"); });
+      on("hub2", function () { go("hub"); });
+    }
+    choose();
+  };
+
   // ----- Watch (episode + 60-second break) -----
   SCREENS.watch = function () {
     var w = state.world;
@@ -392,8 +482,12 @@
       if (balls === 6 && predicted === null) { return predict(); }
       var p = players[balls % players.length];
       var bouncer = (balls + 1) % 4 === 0;
-      var qn = makeQuestion(p.level === "grown" ? "grown" : p.level, bouncer ? 3 : 1 + (balls > 5 ? 1 : 0));
-      el(topBar("Match night · ball " + (balls + 1)) + board() + '<div class="panel"><div class="eyebrow" style="text-align:center">' + p.icon + " " + p.name + " on strike" + (bouncer ? " · 🔥 BOUNCER for SIX" : "") + "</div>" +
+      var mi = p.level !== "grown" && !bouncer ? Math.floor(balls / 3) : -1;
+      var mine = []; for (var x = 0; x < state.missions.length; x++) { if (MISSIONS[state.level === "explorer" ? "explorer" : "starter"].indexOf(state.missions[x]) >= 0) { mine.push(state.missions[x]); } }
+      var m = mi >= 0 && mi < mine.length ? mine[mi] : null;
+      var qn = m ? missionQn(m) : makeQuestion(p.level === "grown" ? "grown" : p.level, bouncer ? 3 : 1 + (balls > 5 ? 1 : 0));
+      if (m) { qn.text = m.recall; }
+      el(topBar("Match night · ball " + (balls + 1)) + board() + '<div class="panel"><div class="eyebrow" style="text-align:center">' + p.icon + " " + p.name + " on strike" + (bouncer ? " · 🔥 BOUNCER for SIX" : "") + (m ? " · 🧺 from your Try it mission" : "") + "</div>" +
         (qn.pics ? '<div class="stage">' + rep(state.world.obj, qn.a) + "</div>" : "") + '<div class="question">' + esc(qn.text) + "</div>" + optionsHtml(qn) +
         '<div id="fb" class="comment"></div><div id="more"></div></div>');
       wireTop();
@@ -409,7 +503,7 @@
           pick(["Dot ball. Let's see that again with pictures.", "Beaten! No run, here's the replay."]);
         byId("fb").innerHTML = line;
         speak(line);
-        byId("more").innerHTML = (ok ? "" : showMe(qn)) + '<div class="row" style="justify-content:center"><button id="nb" class="primary">Next ball →</button></div>';
+        byId("more").innerHTML = (ok ? "" : (m ? missionPicture(m) : showMe(qn))) + '<div class="row" style="justify-content:center"><button id="nb" class="primary">Next ball →</button></div>';
         on("nb", ball);
         byId("nb").focus();
       });
@@ -441,6 +535,7 @@
   // ----- Parents -----
   SCREENS.parents = function () {
     var starter = state.level === "starter";
+    var doneCount = 0; for (var d = 0; d < state.missions.length; d++) { if (MISSIONS[starter ? "starter" : "explorer"].indexOf(state.missions[d]) >= 0) { doneCount++; } }
     var qs = starter ?
       ["We have 6 rotis and 3 of us. How many does each person get?", "Can you share these 8 grapes equally between you and me?", "If 10 shoes go into pairs, how many pairs?"] :
       ["Dinner costs ₹480 for 4 of us. How much is each share?", "24 stairs in 3 equal flights: how many stairs in each?", "We need 36 sweets in 6 boxes for Diwali. How many per box?"];
@@ -452,6 +547,7 @@
       "<p><b>How it was explained in class:</b> dealing objects one at a time into groups, then checking with multiplication (3 × 4 = 12).</p>" +
       "<h3>Three questions to ask at dinner</h3><ul>" + "<li>" + esc(qs[0]) + "</li><li>" + esc(qs[1]) + "</li><li>" + esc(qs[2]) + "</li></ul>" +
       "<h3>A 15-minute activity</h3><p><b>Fair-share chef:</b> give your child 12 to 24 small things (beans, buttons, biscuits) and 2 to 4 plates. They deal them out and say the division out loud. Then swap: you deal, they check.</p>" +
+      "<h3>This week’s Try it missions</h3><p>" + (starter ? "Roti share (kitchen), Sock pairs (laundry), Diya rows (festival)." : "Ladoo share with leftovers (kitchen), Best buy (shop), Run rate (cricket).") + " About 10 minutes each, done together." + (doneCount ? " <b>Done so far: " + doneCount + ".</b>" : "") + "</p>" +
       "<h3>Add your own question for match night</h3><div class=\"row\"><input id=\"pq\" class=\"text\" placeholder=\"e.g. We bought 15 mangoes for 3 families. How many each?\"></div>" +
       '<div class="row"><button id="add" class="primary">Add question</button><button id="hub2" class="soft" data-first>Back to modes</button></div>' + (added ? "<ul>" + added + "</ul>" : "") +
       '<p class="note">Questions are pitched to ' + (starter ? "Child A (just starting)" : "Child B (getting it)") + '. In the real app this card arrives every Monday, built from what the teacher taught.</p></div>');
