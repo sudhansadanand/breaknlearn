@@ -60,6 +60,7 @@ done
 | 6 | `0006_assessments.sql` | assessment guards |
 | 7 | `0007_analytics.sql` | analytics purge and scoring support |
 | 8 | `0008_pairing_device_household.sql` | binds pairing codes to their household (A9-SEC-01) |
+| 9 | `0009_consent_privacy.sql` | consent check, household export, deletion processing (A9-PRIV-01) |
 
 Then load the **core** seeds only:
 - `supabase/seed/0001_curriculum.sql`;
@@ -126,7 +127,7 @@ repo, a ticket or this runbook. Take it from the owner checklist (§2), which re
    page redirects to the change-password page. The change clears the flag through the GoTrue admin API, rotates the
    session cookie and writes an `auth.password_changed` audit row (without the password). This needs
    `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` in the Vercel server environment (§6).
-3. The owner records consent in the portal (`POST /api/v1/admin/consent`), then creates child profiles (`/admin/children`).
+3. The owner reads the notice on `/admin/privacy` and gives consent there **before pairing any TV and before turning on the telemetry or assessment flags** (pairing, sync, telemetry and quizzes return 403 `consent_required` without it), then creates child profiles (`/admin/children`).
 4. Staff roles (editor/reviewer/publisher/analyst) are rows in `bnl.staff_roles`. Grant them only on written request, and never to the household owner by default (ADR-0003).
 
 Locally, `BNL_DEV_AUTH=true` with `BNL_DEV_AUTH_MUST_CHANGE=true` (or a comma-separated list of the synthetic emails)
@@ -165,6 +166,7 @@ GitHub Actions `schedule` or another scheduler the owner approves. Vercel Cron c
 | nightly 00:30 | `node scripts/jobs/aggregate-sessions.mjs` (defaults to yesterday) | must finish before scoring |
 | nightly 01:30, after aggregation succeeds | `node scripts/jobs/score-learners.mjs` (defaults to yesterday) | idempotent per (learner, lesson, as-of, weights) |
 | daily 02:30 | `node scripts/jobs/score-retention-purge.mjs` | raw telemetry > 90 d, aggregates > 395 d |
+| nightly 03:00 | `node scripts/jobs/process-deletion-requests.mjs` | parent deletion requests (target ≤ 7 days); needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to remove school uploads; exit 1 = a request failed and will be retried |
 
 - Re-running any job for the same day is safe (OPS-004).
 - Alert when a job exits non-zero or misses a run (`MONITORING.md`).
@@ -174,13 +176,13 @@ GitHub Actions `schedule` or another scheduler the owner approves. Vercel Cron c
 Change one flag at a time. Redeploy (flags are read from the environment) and watch `MONITORING.md` for at least
 24 h before the next step. To roll back, set the flag to `false` again.
 
-1. **Deploy with all flags off.** The admin portal is behind auth. The student bundle at `/` must be byte-identical to the live app (`pnpm --filter @bnl/admin test:served`), and `/api/v1/student/config` reports `paired: false`, so every TV behaves exactly as today.
-2. `FEATURE_PAIRING=true`. Note: today this flag is **not enforced** (A9-OPS-01); pairing is reachable whenever `FEATURE_STUDENT_PAIRED` is on. Apply the proposal fix first, or treat steps 2 and 3 as one step.
+1. **Deploy with all flags off.** The admin portal is behind auth. The student bundle at `/` is the ES5 port verified by `pnpm --filter @bnl/admin test:served` (logo and music byte-identical to the live app; the parity suite proves identical behaviour), and `/api/v1/student/config` reports `paired_mode: false`, so every TV behaves exactly as today.
+2. `FEATURE_PAIRING=true` (enforced: pairing endpoints return 503 while off).
 3. `FEATURE_STUDENT_PAIRED=true`. TVs show "Family account". Pair **one** owner TV, link explorers, and confirm the legacy import (no lost ×3 records, MIG-002).
 4. `FEATURE_TELEMETRY=true`. Watch the ingest rejection and duplicate ratios. Enable the nightly aggregation.
 5. `FEATURE_ASSESSMENTS=true`. Watch the server-scored quiz flow.
-6. `FEATURE_SCORES=true` plus the scoring job. Same caveat as step 2: the flag is not enforced today, so the analytics page is visible to adults as soon as it is deployed. Scores stay empty until the job runs.
-7. `FEATURE_CATALOG_API=true` (content publishing to TVs). Not enforced today (A9-OPS-01).
+6. `FEATURE_SCORES=true` plus the scoring job. While off, the analytics API returns 503 and the page says scores are not enabled. Scores stay empty until the job runs.
+7. `FEATURE_CATALOG_API=true` (content publishing to TVs). While off, TVs keep their built-in ×1–×10.
 8. `FEATURE_STUDENT_SW` stays `true`. Set it to `false` only as the kill switch (`ROLLBACK.md` §2).
 
 ## 9. Post-deploy smoke (each step)

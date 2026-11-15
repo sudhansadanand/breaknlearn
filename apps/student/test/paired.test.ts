@@ -233,3 +233,40 @@ describe("paired: catalog, legacy import, telemetry", () => {
     expect(prof.headers!.Authorization).toBe("Bearer new");
   });
 });
+
+describe("paired: no parental consent yet (403 consent_required)", () => {
+  const consentRequired = { status: 403, body: { error: { code: "consent_required", message: "Consent required", request_id: "r" } } };
+
+  it("drops refused telemetry batches instead of uploading them later, and keeps the legacy import pending", () => {
+    let consent = false;
+    const batches: { event_id: string }[][] = [];
+    const refused: string[] = [];
+    const s = pairedServer((r) => {
+      if (r.url.endsWith("/progress/legacy-import") && !consent) return consentRequired;
+      if (!r.url.endsWith("/telemetry/batch")) return null;
+      const events = (r.body as { events: { event_id: string }[] }).events;
+      if (!consent) {
+        refused.push(...events.map((e) => e.event_id));
+        return consentRequired;
+      }
+      batches.push(events);
+      return { status: 200, body: { accepted: events.map((e) => e.event_id), duplicates: [], rejected: [] } };
+    });
+    const h = harness({ [DEVICE_KEY]: JSON.stringify(cred()), [LEGACY_PROFILES_KEY]: profilesText }, s.route);
+    h.paired.start();
+    h.paired.saveLinks({ profiles: { "child-1": ASHA }, historical: null });
+    expect(JSON.parse(h.store.getItem(IMPORT_KEY)!)[0].status).toBe("pending");
+    const asha = fixture[LEGACY_PROFILES_KEY].profiles[0];
+    h.paired.profileSelected(asha);
+    h.paired.hidden(); // flush while consent is missing
+    expect(refused.length).toBeGreaterThan(0);
+    expect(JSON.parse(h.store.getItem(QUEUE_KEY) ?? "[]")).toEqual([]);
+    consent = true;
+    h.paired.saveLinks({ profiles: { "child-1": ASHA }, historical: null });
+    expect(JSON.parse(h.store.getItem(IMPORT_KEY)!)[0].status).toBe("done");
+    h.paired.hidden();
+    // nothing recorded while consent was off is ever uploaded
+    const uploaded = batches.flat().map((e) => e.event_id);
+    for (const id of refused) expect(uploaded).not.toContain(id);
+  });
+});
