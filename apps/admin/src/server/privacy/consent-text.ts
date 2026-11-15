@@ -1,11 +1,11 @@
 /**
- * Parental notice and consent wording, version 1 (A9-PRIV-01). STATUS: DRAFT, pending owner approval in the PR.
+ * Parental notice and consent wording, version 1 (A9-PRIV-01). STATUS: approved by the household owner on 2026-11-15.
  * docs/privacy/CONSENT_TEXT.md carries the same text; test/privacy/consent-text.test.ts keeps the two identical.
  * Changing any sentence here is a new consent version: bump CONSENT_VERSION (the portal then asks parents to review).
  */
 
 export const CONSENT_VERSION = "bnl-consent-2026-11-v1";
-export const CONSENT_STATUS: "draft" | "approved" = "draft";
+export const CONSENT_STATUS: "draft" | "approved" = "approved";
 
 export const CONSENT_SCOPES = ["learning_data", "telemetry", "school_uploads"] as const;
 export type ConsentScope = (typeof CONSENT_SCOPES)[number];
@@ -28,6 +28,7 @@ export interface ScopeText {
 
 export const CONSENT_TITLE = "Notice to parents and request for consent";
 
+/** Shown on the Privacy page only while CONSENT_STATUS is "draft" (for example a future wording change before approval). */
 export const DRAFT_NOTICE =
   "DRAFT, pending owner approval. This wording describes what the software does. It is not legal advice and has not been reviewed by a lawyer; have it reviewed before relying on it.";
 

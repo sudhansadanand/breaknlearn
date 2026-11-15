@@ -76,8 +76,8 @@ function nextEnv(extra) {
 
 async function startServer(kind, extraEnv = {}, staticRoot = LEGACY) {
   const child = kind === "next"
-    ? spawn(process.execPath, [join(ADMIN, "node_modules/next/dist/bin/next"), "start", "-p", String(port), "-H", "127.0.0.1"], { cwd: ADMIN, env: nextEnv(extraEnv), stdio: ["ignore", "pipe", "pipe"] })
-    : spawn(process.execPath, [join(ROOT, "scripts/static-server.mjs"), staticRoot, String(port)], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    ? spawn(process.execPath, [join(ADMIN, "node_modules/next/dist/bin/next"), "start", "-p", String(port), "-H", "127.0.0.1"], { cwd: ADMIN, env: nextEnv(extraEnv), stdio: ["ignore", "pipe", "pipe"], detached: true })
+    : spawn(process.execPath, [join(ROOT, "scripts/static-server.mjs"), staticRoot, String(port)], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let out = "";
   child.stdout.on("data", (d) => (out += d));
   child.stderr.on("data", (d) => (out += d));
@@ -90,14 +90,31 @@ async function startServer(kind, extraEnv = {}, staticRoot = LEGACY) {
     }
     await sleep(200);
   }
-  child.kill("SIGKILL");
+  try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
   throw new Error(`${kind} server did not start:\n${out}`);
 }
+/**
+ * Stops the server and every process it spawned. `next start` serves from a worker process that keeps draining
+ * open keep-alive connections after SIGTERM, so the browser could still be answered by the old server after the
+ * next one is listening. Each server runs in its own process group, which is terminated and then killed, and we
+ * wait until no process of the group is left.
+ */
 async function stopServer(s) {
   if (!s) return;
-  const done = new Promise((r) => s.child.once("exit", r));
-  s.child.kill("SIGTERM");
-  await Promise.race([done, sleep(5000)]);
+  const pgid = s.child.pid;
+  const signalGroup = (sig) => {
+    try {
+      process.kill(-pgid, sig);
+      return true;
+    } catch {
+      return false; // group already gone
+    }
+  };
+  const groupAlive = () => signalGroup(0);
+  signalGroup("SIGTERM");
+  for (let i = 0; i < 50 && groupAlive(); i++) await sleep(100);
+  if (groupAlive()) signalGroup("SIGKILL");
+  for (let i = 0; i < 50 && groupAlive(); i++) await sleep(100);
   for (let i = 0; i < 50; i++) {
     try {
       await fetch(`${BASE}/logo.webp`);
