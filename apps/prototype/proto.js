@@ -652,7 +652,14 @@
     }
   });
 
-  if (DEMO) { window.addEventListener("hashchange", function () { if (/family/.test(location.hash)) { state.focusTile = "watch"; go("hub"); } }); }
-  if (DEMO && /family/.test(location.hash)) { state.focusTile = "watch"; go("hub"); }
+  // "#family" (TV break + match night) opens the modes with Watch focused, then clears the hash so the link works again.
+  function familyLink() {
+    if (!/family/.test(location.hash)) { return false; }
+    try { window.history.replaceState(null, "", location.pathname); } catch (e) { /* ignore */ }
+    state.focusTile = "watch"; go("hub");
+    return true;
+  }
+  if (DEMO) { window.addEventListener("hashchange", familyLink); }
+  if (DEMO && familyLink()) { /* opened at the modes */ }
   else { go("home"); }
 })();
