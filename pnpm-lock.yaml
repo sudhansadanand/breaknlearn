@@ -82,7 +82,11 @@ importers:
         specifier: 19.1.9
         version: 19.1.9(@types/react@19.1.12)
 
-  apps/student: {}
+  apps/student:
+    devDependencies:
+      acorn:
+        specifier: 8.19.0
+        version: 8.19.0
 
   packages/assessment:
     dependencies:

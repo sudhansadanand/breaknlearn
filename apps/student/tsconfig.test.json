@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"], "noUncheckedIndexedAccess": false },
+  "include": ["test", "vitest.config.ts", "../../tests/fixtures/student", "../../tests/e2e/student-*.spec.ts"]
+}

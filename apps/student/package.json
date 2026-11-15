@@ -1,9 +1,17 @@
 {
   "name": "@bnl/student",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "Student TV app. P0: the unmodified live app (public/). P3 adds the catalog/offline/telemetry adapters around it.",
+  "type": "module",
+  "description": "Student TV app: ES5 port of the live app (offline-first) with optional paired mode (catalog, telemetry, progress sync, legacy import) and a removable service worker.",
   "scripts": {
-    "dev": "node ../../scripts/static-server.mjs public 4173"
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node ../../scripts/static-server.mjs dist 4173",
+    "check:es5": "node scripts/es5-check.mjs dist/app.js dist/sw.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0"
   }
 }
