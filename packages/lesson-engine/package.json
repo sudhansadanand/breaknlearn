@@ -1,0 +1,12 @@
+{
+  "name": "@bnl/lesson-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lesson templates (picture_groups_v1), deterministic quiz generation, content validation. Pure, ES2017-safe output for the TV client.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@bnl/contracts": "workspace:*" }
+}

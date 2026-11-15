@@ -9,7 +9,7 @@ import {
   verifyDeviceAccessToken,
   type AdultIdentity,
 } from "@bnl/auth";
-import type { DeviceTokenClaims, HouseholdRole } from "@bnl/contracts";
+import type { DeviceTokenClaims, HouseholdRole, StaffRole } from "@bnl/contracts";
 import type { Sql } from "./db-port";
 import type { AppDeps } from "./deps";
 import type { Ctx } from "./http";
@@ -96,4 +96,22 @@ export function withDevice<T>(c: Ctx, claims: DeviceTokenClaims, fn: (sql: Sql) 
 
 export function hasBearer(req: Request): boolean {
   return (req.headers.get("authorization") ?? "") !== "";
+}
+
+/**
+ * Runs `fn` in the staff DB context after confirming, in the same transaction, that the caller
+ * holds at least one of `roles` (ADR-0003). RLS re-checks staff roles inside the database;
+ * this is the handler-level gate (SEC-002). Staff contexts never see household data.
+ */
+export function withStaff<T>(
+  c: Ctx,
+  adult: AdultIdentity,
+  roles: readonly StaffRole[],
+  fn: (sql: Sql, held: readonly StaffRole[]) => Promise<T>,
+): Promise<T> {
+  return c.deps.db({ kind: "staff", userId: adult.userId }, async (sql) => {
+    const held = (await c.deps.repos.memberships.activeStaffRoles(sql, adult.userId)) as readonly StaffRole[];
+    if (!held.some((r) => roles.includes(r))) throw new HttpError(403, "forbidden", "Insufficient role");
+    return fn(sql, held);
+  });
 }
