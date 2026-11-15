@@ -51,7 +51,7 @@ test("the parent reads the notice and gives consent on the Privacy page before p
   const page = await (await guardianContext(browser)).newPage();
   await page.goto("/admin/privacy");
   await expect(page.getByRole("heading", { name: "Privacy and consent", level: 1 })).toBeVisible();
-  await expect(page.locator(".privacy-draft")).toContainText("DRAFT, pending owner approval");
+  await expect(page.locator(".privacy-draft")).toHaveCount(0); // v1 wording approved by the owner
   await expect(page.getByRole("heading", { name: "What the app collects" })).toBeVisible();
   await expect(page.getByText(/please read it again/i)).toBeVisible();
   for (const label of ["Profiles, lesson progress and quiz answers", "Detailed activity and on-screen time", "School syllabus uploads"]) {

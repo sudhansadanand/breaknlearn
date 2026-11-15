@@ -22,10 +22,11 @@ describe("consent text v1", () => {
     expect(CONSENT_VERSION.length).toBeLessThanOrEqual(40); // consent_records.consent_version check
   });
 
-  it("is marked DRAFT until the owner approves it", () => {
-    expect(CONSENT_STATUS).toBe("draft");
-    expect(DRAFT_NOTICE).toMatch(/^DRAFT, pending owner approval/);
-    expect(md).toContain(DRAFT_NOTICE);
+  it("v1 is approved by the owner (2026-11-15), so no DRAFT banner is shown", () => {
+    expect(CONSENT_STATUS).toBe("approved");
+    expect(md).toContain("**Status:** Approved by the household owner on 2026-11-15.");
+    expect(md).not.toContain(DRAFT_NOTICE);
+    expect(DRAFT_NOTICE).toMatch(/^DRAFT, pending owner approval/); // kept for future versions
   });
 
   it("docs/privacy/CONSENT_TEXT.md contains every sentence of the code, so the two never drift", () => {

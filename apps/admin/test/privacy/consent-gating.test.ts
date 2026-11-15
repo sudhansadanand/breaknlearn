@@ -88,7 +88,7 @@ describe("GET/POST /api/v1/admin/consent", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = await bodyOf(res);
-    expect(body).toMatchObject({ current_version: CONSENT_VERSION, text_status: "draft", needs_review: false });
+    expect(body).toMatchObject({ current_version: CONSENT_VERSION, text_status: "approved", needs_review: false });
     expect((body.scopes as { scope: string; granted: boolean }[]).map((s) => [s.scope, s.granted])).toEqual([
       ["learning_data", false], ["telemetry", false], ["school_uploads", false],
     ]);

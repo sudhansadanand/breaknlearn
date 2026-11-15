@@ -105,7 +105,7 @@ What the suites cover:
 |---|---|---|---|
 | A9-SEC-01 | **Medium** (defence in depth; not reachable through the API) | **Open**: fix in proposal §1, verified | Pairing claim can point at another household's TV at SQL level |
 | A9-OPS-01 | **Medium** (rollout safety) | **Open**: fix in proposal §2 | `FEATURE_PAIRING`, `FEATURE_CATALOG_API` and `FEATURE_SCORES` are not enforced |
-| A9-PRIV-01 | Medium (compliance) | **Fixed in `p6/consent-privacy`** (migration 0009); consent wording DRAFT pending owner approval and legal review | Consent is now enforced (403 `consent_required`); guardian export and owner deletion requests with a nightly job |
+| A9-PRIV-01 | Medium (compliance) | **Fixed in `p6/consent-privacy`** (migration 0009); consent wording approved by owner 2026-11-15; legal review recommended | Consent is now enforced (403 `consent_required`); guardian export and owner deletion requests with a nightly job |
 | A9-A11Y-01 | Low | Accepted (parity) | TV subjects screen skips a heading level (h1→h3); kept byte-for-byte with the live app |
 
 ### A9-SEC-01: pairing code can be bound to another household's device (SQL level)
@@ -153,7 +153,7 @@ was no guardian-facing export or deletion (OPS-005 partial).
   attachment, `no-store`, audited with counts), `GET/POST /api/v1/admin/privacy/deletion-requests` (POST owner only, CSRF,
   typed confirmation), `scripts/jobs/process-deletion-requests.mjs` (removes `school-syllabi` objects through the storage
   port, then the rows; idempotent), portal page `/admin/privacy`.
-- Consent wording v1 `bnl-consent-2026-11-v1` in `docs/privacy/CONSENT_TEXT.md`, **DRAFT** pending owner approval; legal
+- Consent wording v1 `bnl-consent-2026-11-v1` in `docs/privacy/CONSENT_TEXT.md`, **approved by the owner on 2026-11-15**; legal
   review recommended (it references the DPDP Act 2023 without claiming compliance).
 
 **Evidence:** `apps/admin/test/privacy/*.test.ts` (consent API, every enforced endpoint 401 → 403 → allowed, withdrawal and

@@ -24,7 +24,7 @@ plus where the value is stored.
 
 ## 4. Privacy decisions (`PRIVACY.md`)
 - [ ] Retention confirmed: raw telemetry ____ days (default 90), aggregates ____ days (default 395), audit log ____ days.
-- [ ] Consent text and version string approved; consent recorded before the first TV is paired.
+- [x] Consent text and version string approved (`bnl-consent-2026-11-v1`, owner, 2026-11-15). [ ] Consent recorded on /admin/privacy before the first TV is paired.
 - [ ] Applicable law and the parental-consent approach confirmed (e.g. DPDP Act 2023).
 - [ ] Deletion and export requests: who runs the interim procedure, target of 7 days.
 - [ ] External households allowed? yes/no. If yes, a privacy notice is needed first.

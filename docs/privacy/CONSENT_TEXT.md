@@ -1,7 +1,7 @@
 # Notice to parents and request for consent
 
 **Version:** `bnl-consent-2026-11-v1`  
-**Status:** DRAFT, pending owner approval. This wording describes what the software does. It is not legal advice and has not been reviewed by a lawyer; have it reviewed before relying on it.
+**Status:** Approved by the household owner on 2026-11-15. This wording describes what the software does. It is not legal advice and has not been reviewed by a lawyer; a legal review is still recommended.
 
 > Source of truth for the portal is `apps/admin/src/server/privacy/consent-text.ts`; `apps/admin/test/privacy/consent-text.test.ts` fails if this file and the code differ. Any wording change is a new version.
 
@@ -97,8 +97,8 @@ By switching a choice on, I confirm that I am the parent or lawful guardian of t
 
 These notes explain the drafting choices. They are not part of the consent text.
 
-- **Approval.** The owner approves (or edits) this wording in the PR. After approval, set `CONSENT_STATUS = "approved"` in
-  `consent-text.ts`; the DRAFT banner then disappears from the portal. Any change to a sentence must also change
+- **Approval.** The owner approved v1 on 2026-11-15 (`CONSENT_STATUS = "approved"` in `consent-text.ts`, so the portal shows
+  no DRAFT banner). A future wording change starts as `"draft"` again until the owner approves it. Any change to a sentence must also change
   `CONSENT_VERSION` (for example `bnl-consent-2026-12-v2`). Parents who consented to an older version see a "please review"
   prompt; their existing consent keeps working until they withdraw it (see `docs/ops/PRIVACY.md` §3).
 - **DPDP Act 2023, in plain terms.** Section 9 requires verifiable consent of a parent or lawful guardian before a child's

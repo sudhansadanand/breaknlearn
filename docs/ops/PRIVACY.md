@@ -52,8 +52,8 @@ What is **not** collected:
 ### 3.1 Wording and versions
 
 - Text: `docs/privacy/CONSENT_TEXT.md`, the same text as `apps/admin/src/server/privacy/consent-text.ts` (a unit test keeps
-  them identical). Version **`bnl-consent-2026-11-v1`**, **status DRAFT pending owner approval** in the PR; the portal shows
-  a DRAFT banner until `CONSENT_STATUS` is set to `"approved"`.
+  them identical). Version **`bnl-consent-2026-11-v1`**, **approved by the owner on 2026-11-15** (`CONSENT_STATUS = "approved"`,
+  no DRAFT banner). Legal review is still recommended.
 - Any wording change needs a new `CONSENT_VERSION`. Parents whose grant is for an older version see "please review" on
   `/admin/privacy`; their consent keeps working until they withdraw it (a text bump never cuts off a child's TV).
 
