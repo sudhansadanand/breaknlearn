@@ -96,7 +96,7 @@ components:
           properties:
             code:
               type: string
-              enum: [unauthorized, forbidden, not_found, validation_failed, conflict, rate_limited, payload_too_large, unsupported_media_type, idempotency_conflict, feature_disabled, internal]
+              enum: [unauthorized, forbidden, not_found, validation_failed, conflict, rate_limited, payload_too_large, unsupported_media_type, idempotency_conflict, feature_disabled, consent_required, internal]
             message: { type: string, maxLength: 300 }
             request_id: { type: string, minLength: 1 }
             details: { type: object, additionalProperties: true }
@@ -807,23 +807,37 @@ paths:
 
   # ---------------- Household privacy ----------------
   /admin/consent:
+    get:
+      tags: [Household]
+      operationId: getConsent
+      security: [{ AdultSession: [] }]
+      description: Owner/guardian. Consent per scope for the own household and the current notice version (A9-PRIV-01).
+      responses: { '200': { description: 'current_version, text_status, scopes[{scope, granted, consent_version, granted_at, current}], needs_review' } }
     post:
       tags: [Household]
       operationId: recordConsent
       security: [{ AdultSession: [] }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [consent_version, decision], properties: { consent_version: { type: string }, decision: { type: string, enum: [grant, revoke] } } } } } }
+      description: Owner/guardian, CSRF, audited. Without scopes a grant or revoke covers all three scopes. Revoke is household-wide per scope.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [consent_version, decision], properties: { consent_version: { type: string, maxLength: 40, pattern: '^[A-Za-z0-9._-]+$' }, decision: { type: string, enum: [grant, revoke] }, scopes: { type: array, minItems: 1, maxItems: 3, items: { type: string, enum: [learning_data, telemetry, school_uploads] } } } } } } }
       responses: { '200': { description: Recorded } }
-  /admin/export:
+  /admin/privacy/export:
     get:
       tags: [Household]
       operationId: exportHouseholdData
       security: [{ AdultSession: [] }]
-      description: Owner/guardian. Own household only; audited; not CDN cached.
-      responses: { '200': { description: JSON/CSV export } }
-  /admin/deletion-requests:
+      description: Owner/guardian. Own household only (every household-scoped row, secret columns removed); attachment; no-store; audited; rate limited.
+      responses: { '200': { description: JSON export (attachment) } }
+  /admin/privacy/deletion-requests:
+    get:
+      tags: [Household]
+      operationId: listDeletionRequests
+      security: [{ AdultSession: [] }]
+      description: Owner/guardian. The own household's deletion requests and their status.
+      responses: { '200': { description: 'items[]' } }
     post:
       tags: [Household]
       operationId: requestDeletion
       security: [{ AdultSession: [] }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [scope], properties: { scope: { type: string, enum: [learner, household, raw_telemetry] }, learner_id: { $ref: '#/components/schemas/UUID' } } } } } }
-      responses: { '202': { description: Deletion queued and audited } }
+      description: Owner only, CSRF, explicit confirmation. Processed by the nightly process-deletion-requests job (at most 7 days).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [scope, confirmation], additionalProperties: false, properties: { scope: { type: string, enum: [learner, household, telemetry_only] }, learner_id: { $ref: '#/components/schemas/UUID' }, confirmation: { type: string, enum: [DELETE] } } } } } }
+      responses: { '202': { description: Deletion queued and audited }, '409': { description: The same request is already queued } }

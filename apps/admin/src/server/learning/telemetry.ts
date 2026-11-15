@@ -10,6 +10,7 @@ import { TELEMETRY_BATCH_MAX, TELEMETRY_BATCH_MAX_BYTES, TelemetryAck } from "@b
 import { triageBatch, type AcceptedEvent } from "@bnl/telemetry";
 import { verifyDeviceBearer, withDevice } from "../authn";
 import { json, validationFailed, type Ctx } from "../http";
+import { requireDeviceConsent } from "../privacy/gate";
 import { enforceLearningRateLimit, readBoundedJson, requireIdempotencyKey, telemetryEnabled, uniqueUuids } from "./common";
 import { REPLAY_HEADER, idempotent, requestSha } from "./idempotency";
 import { learningRepo, type EventInsert, type SessionUpsert } from "./index";
@@ -61,8 +62,10 @@ export async function telemetryBatchHandler(req: Request, c: Ctx): Promise<Respo
   const householdId = claims.hid;
   const deviceId = claims.sub;
 
-  const result = await withDevice(c, claims, (sql) =>
-    idempotent(sql, repo, { scope: "telemetry.batch", key, ownerId: deviceId, householdId, requestSha256: requestSha(body), now }, async () => {
+  const result = await withDevice(c, claims, async (sql) => {
+    // A9-PRIV-01: checked before the replay cache, so a withdrawal stops ingestion on the very next batch.
+    await requireDeviceConsent(sql, ["learning_data", "telemetry"]);
+    return idempotent(sql, repo, { scope: "telemetry.batch", key, ownerId: deviceId, householdId, requestSha256: requestSha(body), now }, async () => {
       const [learners, lessons, versions] = await Promise.all([
         repo.learnerIdsInHousehold(sql, householdId),
         repo.knownLessonIds(sql, uniqueUuids(events.map((e) => field(e, "lesson_id")))),
@@ -116,7 +119,7 @@ export async function telemetryBatchHandler(req: Request, c: Ctx): Promise<Respo
         rejected: triage.rejected,
       });
       return { status: 200, body: ack };
-    }),
-  );
+    });
+  });
   return json(c, result.body, result.status, result.replayed ? { [REPLAY_HEADER]: "true" } : {});
 }

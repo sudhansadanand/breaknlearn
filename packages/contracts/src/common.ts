@@ -21,6 +21,8 @@ export const ErrorCode = z.enum([
   "unsupported_media_type",
   "idempotency_conflict",
   "feature_disabled",
+  /** 403: the household has not given (or has withdrawn) parental consent for this kind of data (A9-PRIV-01). */
+  "consent_required",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;

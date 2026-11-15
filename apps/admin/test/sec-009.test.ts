@@ -54,11 +54,12 @@ describe("SEC-009 CSRF / Origin", () => {
   it("accepts same-origin mutations with a matching token", async () => {
     const res = await routes.consent.POST(req("POST", "/api/v1/admin/consent", { session: owner, body: { consent_version: "2026-11", decision: "grant" } }));
     expect(res.status).toBe(200);
-    expect(env.store.consent).toHaveLength(1);
+    // A body without `scopes` grants all three consent scopes (A9-PRIV-01, additive to the original body).
+    expect(env.store.consent.map((r) => r.scope).sort()).toEqual(["learning_data", "school_uploads", "telemetry"]);
     expect(env.store.audit.at(-1)).toMatchObject({ action: "consent.granted", actorAuthId: OWNER_A.userId });
     const revoked = await routes.consent.POST(req("POST", "/api/v1/admin/consent", { session: owner, body: { consent_version: "2026-11", decision: "revoke" } }));
     expect(await revoked.json()).toMatchObject({ decision: "revoke", changed: true });
-    expect(env.store.consent[0]!.revokedAt).not.toBeNull();
+    expect(env.store.consent.every((r) => r.revokedAt !== null)).toBe(true);
   });
   it("bearer-authenticated device writes are not subject to cookie CSRF (no ambient credential)", async () => {
     const res = await routes.profiles.POST(req("POST", "/api/v1/profiles", { bearer: "x.y.z", csrf: false, body: {} }));

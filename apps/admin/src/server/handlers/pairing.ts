@@ -25,6 +25,7 @@ import { clientIp, json, readJson, validationFailed, type Ctx } from "../http";
 import { enforceRateLimit } from "../rate-limits";
 import type { DeviceRow } from "../repos";
 import { requireFeature } from "../flags";
+import { requireHouseholdConsent } from "../privacy/gate";
 
 const gone = () => new HttpError(410, "not_found", "Pairing expired, already used, or unknown; start again on the TV");
 
@@ -77,6 +78,8 @@ export async function approvePairingHandler(req: Request, c: Ctx): Promise<Respo
   // Runs as the adult: RLS must let bnl_adult see/claim *unclaimed* codes (household_id is null)
   // and insert paired_devices only for households where it holds owner/guardian.
   const deviceId = await withAdultHousehold(c, adult, async (sql, m) => {
+    // A9-PRIV-01: a TV only syncs a child's data once a parent has consented to learning data.
+    await requireHouseholdConsent(sql, m.householdId, ["learning_data"]);
     const row = await c.deps.repos.pairing.findByCodeHash(sql, hashPairingCode(c.deps.keys.pairingCode, code));
     if (!row || pairingState(row, now) !== "pending") {
       throw new HttpError(404, "not_found", "Pairing code not found or expired");

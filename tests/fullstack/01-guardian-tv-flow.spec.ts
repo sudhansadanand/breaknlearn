@@ -2,10 +2,12 @@
  * Full-stack happy path on ONE origin (ADR-0006): the built admin (`next start`) serves /admin, /api/v1 and the
  * student bundle at `/`, backed by a throwaway Postgres with real roles/RLS. Real handlers, real DB, real jobs.
  *
- * guardian login → create two child profiles → pair a TV (student bundle) → link explorers + legacy import →
+ * guardian login → create two child profiles → parental consent on /admin/privacy (A9-PRIV-01: pairing, sync and
+ * telemetry are refused without it) → pair a TV (student bundle) → link explorers + legacy import →
  * child plays ×3 (one world, 10 slides) and the quiz → telemetry and progress land in the DB → server-side
  * assessment (start/answers/finish with the TV credential) → nightly jobs (aggregate-sessions, score-learners)
- * → the guardian sees the child's activity and score on /admin/analytics.
+ * → the guardian sees the child's activity and score on /admin/analytics → export and a deletion request processed
+ * by the nightly deletion job.
  */
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
@@ -42,6 +44,24 @@ test("guardian signs in and creates two child profiles", async ({ page }) => {
     `select json_agg(json_build_object('id', id, 'slot', slot, 'display_name', display_name) order by slot) from bnl.learner_profiles where household_id = '${HH_A}'`);
   expect(rows.map((r) => r.display_name)).toEqual(CHILDREN.map((c) => c.name));
   learnerIds = rows.map((r) => r.id);
+});
+
+test("the parent reads the notice and gives consent on the Privacy page before pairing", async ({ browser }) => {
+  // Seed state: only learning_data under an old synthetic version; telemetry and uploads not given.
+  const page = await (await guardianContext(browser)).newPage();
+  await page.goto("/admin/privacy");
+  await expect(page.getByRole("heading", { name: "Privacy and consent", level: 1 })).toBeVisible();
+  await expect(page.locator(".privacy-draft")).toContainText("DRAFT, pending owner approval");
+  await expect(page.getByRole("heading", { name: "What the app collects" })).toBeVisible();
+  await expect(page.getByText(/please read it again/i)).toBeVisible();
+  for (const label of ["Profiles, lesson progress and quiz answers", "Detailed activity and on-screen time", "School syllabus uploads"]) {
+    await page.getByRole("checkbox", { name: label }).check();
+  }
+  await page.getByRole("button", { name: "Save my choices" }).click();
+  await expect(page.getByRole("status")).toHaveText("Your choices are saved.");
+  const active = sqlJson<{ scope: string; v: string }[]>(
+    `select json_agg(json_build_object('scope', scope, 'v', consent_version) order by scope) from bnl.consent_records where household_id = '${HH_A}' and revoked_at is null and consent_version = 'bnl-consent-2026-11-v1'`);
+  expect(active.map((r) => r.scope)).toEqual(["learning_data", "school_uploads", "telemetry"]);
 });
 
 async function openTv(page: Page) {
@@ -176,4 +196,36 @@ test("the guardian sees activity and a score for ×3 on the analytics page; the 
   // Never a child name in the TV-facing or log-facing ids: the page itself is no-store.
   const res = await page.request.get("/admin/analytics");
   expect(res.headers()["cache-control"]).toContain("no-store");
+});
+
+test("the parent downloads the household export and has one child's activity records deleted by the nightly job", async ({ browser }) => {
+  const page = await (await guardianContext(browser)).newPage();
+  const res = await page.request.get("/api/v1/admin/privacy/export");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["cache-control"]).toContain("no-store");
+  expect(res.headers()["content-disposition"]).toMatch(/^attachment; filename="breaknlearn-export-/);
+  const exported = (await res.json()) as { household_id: string; tables: Record<string, unknown[]> };
+  expect(exported.household_id).toBe(HH_A);
+  expect(exported.tables.learning_events!.length).toBeGreaterThan(0);
+  const text = JSON.stringify(exported);
+  expect(text).not.toMatch(/refresh_token_hash|code_hash|poll_secret/);
+  expect(text).not.toContain("bbbbbbbb-0000-4000-8000-00000000000b");
+
+  await page.goto("/admin/privacy");
+  await page.getByRole("radio", { name: "Detailed activity records" }).check();
+  await page.getByRole("combobox", { name: /^Child/ }).selectOption({ label: CHILDREN[0]!.name });
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+  await page.getByRole("button", { name: "Request deletion" }).click();
+  await expect(page.getByRole("status")).toContainText("Request received");
+  expect(sqlJson<number>(`select count(*) from bnl.learning_events where learner_id = '${learnerIds[0]}'`)).toBeGreaterThan(0);
+
+  const job = runJob("process-deletion-requests.mjs", []);
+  expect(job).toMatchObject({ failed: 0 });
+  expect(job.completed as number).toBeGreaterThanOrEqual(1);
+  expect(sqlJson<number>(`select count(*) from bnl.learning_events where learner_id = '${learnerIds[0]}'`)).toBe(0);
+  expect(sqlJson<number>(`select count(*) from bnl.learner_profiles where id = '${learnerIds[0]}'`)).toBe(1);
+  await page.reload();
+  await expect(page.getByRole("cell", { name: "Completed" })).toBeVisible();
+  // The nightly re-run finds nothing left to do (idempotent).
+  expect(runJob("process-deletion-requests.mjs", [])).toMatchObject({ considered: 0, failed: 0 });
 });

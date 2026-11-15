@@ -84,10 +84,26 @@ export interface MembershipRepo {
   activeStaffRoles(sql: Sql, userId: string): Promise<StaffRole[]>;
 }
 
+/** Scopes of bnl.consent_records.scope (0001 check constraint). */
+export type ConsentScopeName = "learning_data" | "telemetry" | "school_uploads";
+
+export interface ActiveConsentRow {
+  readonly scope: ConsentScopeName;
+  readonly consentVersion: string;
+  readonly guardianUserId: string;
+  readonly grantedAt: Date;
+}
+
 export interface ConsentRepo {
-  grant(sql: Sql, p: { householdId: string; userId: string; consentVersion: string; at: Date }): Promise<void>;
-  /** Returns the number of active grants revoked. */
-  revoke(sql: Sql, p: { householdId: string; userId: string; consentVersion: string; at: Date }): Promise<number>;
+  /** Inserts one grant row; `scope` defaults to learning_data (the column default). */
+  grant(sql: Sql, p: { householdId: string; userId: string; consentVersion: string; at: Date; scope?: ConsentScopeName }): Promise<void>;
+  /**
+   * Returns the number of active grants revoked. With `scope`: every active grant of that scope in the household
+   * (any adult, any version — consent belongs to the household). Without: the caller's grants of `consentVersion`.
+   */
+  revoke(sql: Sql, p: { householdId: string; userId: string; consentVersion: string; at: Date; scope?: ConsentScopeName }): Promise<number>;
+  /** Unrevoked grants of the household, newest first. */
+  active(sql: Sql, householdId: string): Promise<ActiveConsentRow[]>;
 }
 
 export interface AuditEntry {

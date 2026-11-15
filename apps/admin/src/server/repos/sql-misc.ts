@@ -1,6 +1,6 @@
 import { HouseholdRole, StaffRole } from "@bnl/contracts";
 import { redact } from "@bnl/auth";
-import type { AuditRepo, ConsentRepo, MembershipRepo, RateLimitRepo } from "./types";
+import type { AuditRepo, ConsentRepo, ConsentScopeName, MembershipRepo, RateLimitRepo } from "./types";
 
 /** bnl.household_memberships + bnl.staff_roles (ADR-0003). */
 export const sqlMembershipRepo: MembershipRepo = {
@@ -23,16 +23,29 @@ export const sqlMembershipRepo: MembershipRepo = {
 export const sqlConsentRepo: ConsentRepo = {
   async grant(sql, p) {
     await sql`
-      insert into bnl.consent_records (household_id, guardian_auth_user_id, consent_version, granted_at)
-      values (${p.householdId}, ${p.userId}, ${p.consentVersion}, ${p.at})`;
+      insert into bnl.consent_records (household_id, guardian_auth_user_id, consent_version, scope)
+      values (${p.householdId}, ${p.userId}, ${p.consentVersion}, ${p.scope ?? "learning_data"})`;
   },
   async revoke(sql, p) {
-    const rows = await sql`
-      update bnl.consent_records set revoked_at = ${p.at}
-       where household_id = ${p.householdId} and guardian_auth_user_id = ${p.userId}
-         and consent_version = ${p.consentVersion} and revoked_at is null
-       returning 1`;
+    const rows = p.scope
+      ? await sql`
+          update bnl.consent_records set revoked_at = ${p.at}
+           where household_id = ${p.householdId} and scope = ${p.scope} and revoked_at is null
+           returning 1`
+      : await sql`
+          update bnl.consent_records set revoked_at = ${p.at}
+           where household_id = ${p.householdId} and guardian_auth_user_id = ${p.userId}
+             and consent_version = ${p.consentVersion} and revoked_at is null
+           returning 1`;
     return rows.length;
+  },
+  async active(sql, householdId) {
+    const rows = await sql<{ scope: ConsentScopeName; consentVersion: string; guardianUserId: string; grantedAt: Date }[]>`
+      select scope, consent_version as "consentVersion", guardian_auth_user_id as "guardianUserId", granted_at as "grantedAt"
+        from bnl.consent_records
+       where household_id = ${householdId} and revoked_at is null
+       order by granted_at desc, id`;
+    return rows.map((r) => ({ ...r, grantedAt: new Date(r.grantedAt) }));
   },
 };
 

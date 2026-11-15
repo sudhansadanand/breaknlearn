@@ -5,6 +5,7 @@ import { extractChapters, suggestForChapter, type ExtractionResult, type SourceK
 import { MIME_CSV, MIME_DOCX, MIME_PDF, MIME_TEXT, sniffMime } from "@bnl/storage";
 import { z } from "zod";
 import { requireAdult, requireCsrf, withAdultHousehold, type HouseholdMembership } from "../authn";
+import { requireHouseholdConsent } from "../privacy/gate";
 import type { Sql } from "../db-port";
 import { empty, json, readJson, type Ctx } from "../http";
 import { db, enforceCurriculumRateLimit, pathUuid, PlainText, readBodyBounded, readJsonBounded } from "./common";
@@ -216,6 +217,8 @@ export async function createImportHandler(req: Request, c: Ctx, depsArg?: Curric
   const input = await readImportInput(req, deps);
 
   const result = await withAdultHousehold(c, adult, async (sql, m) => {
+    // A9-PRIV-01: school documents are uploaded only with the household's school_uploads consent.
+    await requireHouseholdConsent(sql, m.householdId, ["school_uploads"]);
     const prior = await deps.repo.getIdempotency(sql, IMPORT_SCOPE, adult.userId, key.data);
     if (prior) {
       if (prior.requestSha256 !== input.requestSha256) throw new HttpError(409, "idempotency_conflict", "Idempotency-Key was already used for a different request");
