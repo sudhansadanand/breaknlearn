@@ -6,6 +6,22 @@ import { ConfigError } from "./secrets";
 export interface AdultIdentity {
   readonly userId: string;
   readonly email: string;
+  /**
+   * Set (true) while the account still holds an operator-issued one-time password and must choose its own
+   * before doing anything else. Server-controlled: Supabase `app_metadata.bnl_must_change_password`, which users
+   * cannot edit. Absent means false.
+   */
+  readonly mustChangePassword?: true;
+}
+
+/** Supabase `app_metadata` key carrying the forced-password-change flag (written by scripts/ops/bootstrap-owner.mjs). */
+export const MUST_CHANGE_PASSWORD_CLAIM = "bnl_must_change_password";
+
+export interface ChangePasswordInput {
+  /** A fresh access token for the user (from re-verifying the current password). */
+  readonly accessToken: string;
+  readonly userId: string;
+  readonly newPassword: string;
 }
 
 export interface AdultSession {
@@ -21,6 +37,11 @@ export interface AdultAuthProvider {
   verifySession(token: string): Promise<AdultIdentity | null>;
   /** Password sign-in. Returns null on bad credentials (callers must not reveal which part was wrong). */
   signInWithPassword(email: string, password: string): Promise<AdultSession | null>;
+  /**
+   * Sets the user's new password and clears the must-change flag. Callers must already have verified the
+   * current password (the access token comes from that sign-in). Throws on any failure; nothing is retried.
+   */
+  changePassword(input: ChangePasswordInput): Promise<void>;
 }
 
 const TOKEN_REJECTIONS = [
@@ -46,7 +67,10 @@ export function identityFromClaims(payload: JWTPayload): AdultIdentity | null {
   const email = (payload as { email?: unknown }).email;
   if (typeof sub !== "string" || !Uuid.safeParse(sub).success) return null;
   if (typeof email !== "string" || !EMAIL.test(email) || email.length > 254) return null;
-  return { userId: sub.toLowerCase(), email: email.toLowerCase() };
+  const appMeta = (payload as { app_metadata?: unknown }).app_metadata;
+  // Only a literal boolean true sets the flag; anything else (absent, "true", 1) does not.
+  const mustChange = typeof appMeta === "object" && appMeta !== null && (appMeta as Record<string, unknown>)[MUST_CHANGE_PASSWORD_CLAIM] === true;
+  return { userId: sub.toLowerCase(), email: email.toLowerCase(), ...(mustChange ? { mustChangePassword: true as const } : {}) };
 }
 
 export type FetchLike = (input: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{
@@ -59,8 +83,10 @@ export interface SupabaseJwtProviderOptions {
   readonly supabaseUrl: string;
   /** Legacy HS256 project JWT secret. When absent, the project JWKS endpoint is used. */
   readonly jwtSecret?: string | undefined;
-  /** Public anon key; only needed for server-side password sign-in. */
+  /** Public anon key; only needed for server-side password sign-in and password change. */
   readonly anonKey?: string | undefined;
+  /** Service-role key (server only): needed to clear the must-change flag via the GoTrue admin API. */
+  readonly serviceRoleKey?: string | undefined;
   readonly fetch?: FetchLike;
   /** Test seam: custom JWKS resolver. */
   readonly jwks?: JWTVerifyGetKey;
@@ -79,6 +105,7 @@ export class SupabaseJwtProvider implements AdultAuthProvider {
   private readonly jwks: JWTVerifyGetKey | null;
   private readonly fetchImpl: FetchLike | null;
   private readonly anonKey: string | null;
+  private readonly serviceRoleKey: string | null;
   private readonly now: () => Date;
 
   constructor(opts: SupabaseJwtProviderOptions) {
@@ -100,6 +127,7 @@ export class SupabaseJwtProvider implements AdultAuthProvider {
     }
     this.fetchImpl = opts.fetch ?? null;
     this.anonKey = opts.anonKey ?? null;
+    this.serviceRoleKey = opts.serviceRoleKey ? opts.serviceRoleKey : null;
     this.now = opts.now ?? (() => new Date());
   }
 
@@ -146,4 +174,57 @@ export class SupabaseJwtProvider implements AdultAuthProvider {
     if (!payload || !identity || typeof payload.exp !== "number") return null;
     return { token: body.access_token, identity, expiresAt: new Date(payload.exp * 1000) };
   }
+
+  /**
+   * 1. PUT /auth/v1/user with the user's own access token sets the new password (GoTrue enforces its own policy too);
+   * 2. PUT /auth/v1/admin/users/{id} with the service-role key clears app_metadata.bnl_must_change_password.
+   * Response bodies are never read into errors (they can echo user data).
+   */
+  async changePassword(input: ChangePasswordInput): Promise<void> {
+    if (!this.fetchImpl || !this.anonKey || !this.serviceRoleKey) {
+      throw new ConfigError("Supabase password change needs SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY and fetch");
+    }
+    if (!Uuid.safeParse(input.userId).success) throw new Error("changePassword: invalid user id");
+    const userRes = await this.fetchImpl(`${this.issuer}/user`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", apikey: this.anonKey, authorization: `Bearer ${input.accessToken}` },
+      body: JSON.stringify({ password: input.newPassword }),
+    });
+    if (userRes.status === 400 || userRes.status === 422) throw new PasswordChangeRejected(userRes.status);
+    if (!userRes.ok) throw new Error(`Supabase password update responded ${userRes.status}`);
+    const adminRes = await this.fetchImpl(`${this.issuer}/admin/users/${encodeURIComponent(input.userId)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", apikey: this.serviceRoleKey, authorization: `Bearer ${this.serviceRoleKey}` },
+      body: JSON.stringify({ app_metadata: { [MUST_CHANGE_PASSWORD_CLAIM]: false } }),
+    });
+    if (!adminRes.ok) throw new Error(`Supabase admin update responded ${adminRes.status}`);
+  }
+}
+
+/** The auth server refused the new password (e.g. its own strength policy, 422). Carries only the status. */
+export class PasswordChangeRejected extends Error {
+  override readonly name = "PasswordChangeRejected";
+  constructor(readonly status: number) {
+    super(`Supabase password update responded ${status}`);
+  }
+}
+
+/** Adult password policy (owner bootstrap follow-up): length bounds and no email local part. */
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MAX_LENGTH = 128;
+
+export type PasswordPolicyIssue = "too_short" | "too_long" | "contains_email";
+
+/**
+ * Checks a proposed password using only the input itself (no oracle about the stored password). The
+ * "differs from current" rule is checked by the caller after the current password has been verified.
+ */
+export function passwordPolicyIssues(password: string, email: string): PasswordPolicyIssue[] {
+  const issues: PasswordPolicyIssue[] = [];
+  const length = [...password.normalize("NFKC")].length;
+  if (length < PASSWORD_MIN_LENGTH) issues.push("too_short");
+  if (length > PASSWORD_MAX_LENGTH) issues.push("too_long");
+  const local = email.split("@")[0]?.toLowerCase() ?? "";
+  if (local.length >= 3 && password.toLowerCase().includes(local)) issues.push("contains_email");
+  return issues;
 }

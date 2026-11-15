@@ -56,6 +56,8 @@ export function buildAdultAuth(env: Env, keys: ServerKeys): AdultAuthProvider {
     supabaseUrl: env.SUPABASE_URL,
     jwtSecret: env.SUPABASE_JWT_SECRET,
     anonKey: env.SUPABASE_ANON_KEY,
+    // Server-only; used solely to clear the forced-password-change flag (POST /api/v1/auth/password).
+    serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
     fetch: globalThis.fetch as unknown as FetchLike,
   });
 }

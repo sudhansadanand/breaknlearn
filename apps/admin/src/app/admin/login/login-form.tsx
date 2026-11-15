@@ -12,9 +12,9 @@ export function LoginForm() {
     const form = new FormData(e.currentTarget);
     setBusy(true);
     setError(null);
-    const res = await apiPost("/api/v1/auth/login", { email: String(form.get("email") ?? ""), password: String(form.get("password") ?? "") });
+    const res = await apiPost<{ must_change_password?: boolean }>("/api/v1/auth/login", { email: String(form.get("email") ?? ""), password: String(form.get("password") ?? "") });
     setBusy(false);
-    if (res.ok) window.location.assign("/admin");
+    if (res.ok) window.location.assign(res.data?.must_change_password ? "/admin/change-password" : "/admin");
     else setError(res.message);
   }
 

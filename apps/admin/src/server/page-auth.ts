@@ -7,12 +7,22 @@ import { getDeps } from "./deps";
 import type { Ctx } from "./http";
 
 export const LOGIN_PATH = "/admin/login";
+export const CHANGE_PASSWORD_PATH = "/admin/change-password";
 
-/** Server-side gate for every /admin page except login (SEC-001): no session => redirect, no data. */
-export async function requireAdultPage(): Promise<AdultIdentity> {
+export interface RequireAdultPageOptions {
+  /** Only the change-password page sets this: it must stay reachable while the one-time password is pending. */
+  readonly allowPendingPasswordChange?: boolean;
+}
+
+/**
+ * Server-side gate for every /admin page except login (SEC-001): no session => redirect to login, no data.
+ * An account that must still replace its one-time password is sent to the change-password page.
+ */
+export async function requireAdultPage(opts: RequireAdultPageOptions = {}): Promise<AdultIdentity> {
   const store = await cookies();
   const identity = await adultFromSessionToken(getDeps(), store.get(SESSION_COOKIE)?.value);
   if (!identity) redirect(LOGIN_PATH);
+  if (identity.mustChangePassword && !opts.allowPendingPasswordChange) redirect(CHANGE_PASSWORD_PATH);
   return identity;
 }
 

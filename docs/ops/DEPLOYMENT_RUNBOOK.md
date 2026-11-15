@@ -94,17 +94,43 @@ Verify:
 
 ## 5. First owner and household
 
-1. Invite the owner's admin email through Supabase Auth, with no default password. The email comes from the owner checklist.
-2. After the owner's first sign-in, create the household and the owner membership as one audited operation, using the migration login:
-   ```sql
-   begin;
-   set local role bnl_owner;
-   select set_config('bnl.actor_id', '<auth user id of the owner>', true);
-   select bnl.create_household('<household label, no child names>', 'Asia/Kolkata');
-   commit;
+The owner's admin account starts with a **generated one-time password** that the owner must replace at first
+sign-in. The owner's email is supplied at run time only (`--email` or `BNL_OWNER_EMAIL`); it is never written to the
+repo, a ticket or this runbook. Take it from the owner checklist (§2), which records only that it was provided.
+
+1. On the operator's machine, with the values from the secret stores in the shell environment only (not in a file):
+   ```sh
+   export SUPABASE_URL='https://<project>.supabase.co'           # https is required
+   export SUPABASE_SERVICE_ROLE_KEY='<service-role key>'         # server-only; never in Vercel client env
+   export BNL_MIGRATION_DB_URL='<direct postgres URL, migration login>'
+   node scripts/ops/bootstrap-owner.mjs --email '<owner admin email>' --household-name 'Our family' --dry-run
+   node scripts/ops/bootstrap-owner.mjs --email '<owner admin email>' --household-name 'Our family'
    ```
+   - The script creates the Supabase Auth user (email confirmed) with a 24-character crypto-random password and
+     `app_metadata.bnl_must_change_password = true`. If the user exists but has **never signed in**, the password is
+     reset the same way, so a lost one-time password is recovered by re-running. A user who has already signed in
+     is left untouched, and no password is printed.
+   - In one transaction (advisory lock, `bnl_owner`), it creates the household and the `owner` membership through
+     `bnl.create_household` (audited as `household.create`), unless the user already owns a household. Re-running is a
+     no-op.
+   - The one-time password is printed **once**, to stdout, at the end. Nothing else prints it, logs it or writes it to a
+     file. Copy it into the password manager, give it to the owner out of band (in person or by phone, never in the
+     same channel as the email address), then clear the terminal (`clear && history -c` or close it). Do not run the
+     script with stdout redirected to a file.
+   - `--dry-run` reports what would happen and changes nothing. A plain-http `SUPABASE_URL` is refused, except for a
+     local Supabase with `--allow-insecure-local`.
+2. The owner signs in at `/admin/login` with the one-time password and is sent to `/admin/change-password`. Until the
+   owner chooses a new password (≥ 12 characters, different from the current one, not containing the part of the
+   email before the @), every adult API returns `403 forbidden` with `details.reason = "password_change_required"`
+   (except `GET /api/v1/admin/me`, `POST /api/v1/auth/password` and `POST /api/v1/auth/logout`), and every portal
+   page redirects to the change-password page. The change clears the flag through the GoTrue admin API, rotates the
+   session cookie and writes an `auth.password_changed` audit row (without the password). This needs
+   `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` in the Vercel server environment (§6).
 3. The owner records consent in the portal (`POST /api/v1/admin/consent`), then creates child profiles (`/admin/children`).
 4. Staff roles (editor/reviewer/publisher/analyst) are rows in `bnl.staff_roles`. Grant them only on written request, and never to the household owner by default (ADR-0003).
+
+Locally, `BNL_DEV_AUTH=true` with `BNL_DEV_AUTH_MUST_CHANGE=true` (or a comma-separated list of the synthetic emails)
+starts the dev users with the same flag, so the forced-change flow can be tried without Supabase.
 
 ## 6. Vercel environment (per `.env.example`)
 
@@ -114,7 +140,7 @@ Server-only values must never be `NEXT_PUBLIC_`.
 | Variable | Production value |
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | from §1 |
-| `SUPABASE_SERVICE_ROLE_KEY` | from §1. Server only (Storage) |
+| `SUPABASE_SERVICE_ROLE_KEY` | from §1. Server only (Storage; clearing the forced-password-change flag, §5) |
 | `SUPABASE_JWT_SECRET` | optional. Empty means JWKS |
 | `APP_ORIGIN`, `ADMIN_ORIGIN` | the production origin (same value, ADR-0006). The Origin/CSRF check depends on it |
 | `DEVICE_TOKEN_SIGNING_SECRET` | ≥32 random bytes, base64, unique per environment. Rotating it signs every TV out (they re-pair) |
