@@ -12,6 +12,8 @@ export default tseslint.config(
       "docs/handoff/**",
       "playwright-report/**",
       "test-results/**",
+      "**/next-env.d.ts",
+      "apps/admin/public/**",
     ],
   },
   js.configs.recommended,

@@ -1,0 +1,20 @@
+{
+  "name": "@bnl/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BreakNLearn identity & security primitives: device tokens, refresh rotation, pairing codes, adult auth providers, CSRF, rate limiting, API errors, log redaction. Server-only (node:crypto).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bnl/contracts": "workspace:*",
+    "jose": "6.1.0"
+  }
+}

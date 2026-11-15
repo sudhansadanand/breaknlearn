@@ -1,0 +1,5 @@
+# Student app files copied at build time (scripts/copy-student.mjs); never edit or commit copies.
+/public/
+/.next/
+/next-env.d.ts
+*.tsbuildinfo
