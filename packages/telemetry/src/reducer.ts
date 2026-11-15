@@ -2,10 +2,12 @@
  * Session reducer (spec §7). Turns deduplicated events into time metrics that are honest:
  * - estimated active playback = sum of heartbeat `playback_ms` where foreground && playing
  * - foreground estimate       = sum of heartbeat `visible_ms` where foreground
- * Each contribution is already capped at 30 s by the schema; hidden/paused heartbeats add 0;
+ * Each contribution is already capped at 30 s by the schema (and again here); hidden/paused heartbeats add 0;
  * duplicates (same event_id) count once; ordering uses client_sequence within a session, never wall clocks.
  */
-import type { LearningEvent } from "@bnl/contracts";
+import { HEARTBEAT_CAP_MS, type LearningEvent } from "@bnl/contracts";
+
+const clampMs = (v: number | undefined) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(HEARTBEAT_CAP_MS, v)) : 0);
 
 export interface SessionMetrics {
   readonly client_session_id: string;
@@ -48,8 +50,10 @@ export function reduceSessions(events: readonly LearningEvent[]): Map<string, Se
       if (e.occurred_at > last) last = e.occurred_at;
       if (e.event_type === "playback_heartbeat") {
         const p = e.payload;
-        if (p.foreground === true) foreground += Math.max(0, p.visible_ms ?? 0);
-        if (p.foreground === true && p.playing === true) playback += Math.max(0, p.playback_ms ?? 0);
+        const visible = clampMs(p.visible_ms);
+        if (p.foreground === true) foreground += visible;
+        // Playback is a subset of visible foreground time; never credit more playback than visibility.
+        if (p.foreground === true && p.playing === true) playback += Math.min(clampMs(p.playback_ms), visible);
       }
       if (INTERACTIONS.has(e.event_type)) interactions++;
       // A slide counts as genuinely completed only when exited after being entered in this session.

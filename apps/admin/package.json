@@ -15,17 +15,20 @@
     "test:integration": "node ../../scripts/db/test-db.mjs -- vitest run test/integration --no-file-parallelism"
   },
   "dependencies": {
+    "@bnl/assessment": "workspace:*",
     "@bnl/auth": "workspace:*",
     "@bnl/contracts": "workspace:*",
+    "@bnl/curriculum": "workspace:*",
+    "@bnl/db": "workspace:*",
+    "@bnl/lesson-engine": "workspace:*",
+    "@bnl/storage": "workspace:*",
+    "@bnl/student-progress": "workspace:*",
+    "@bnl/telemetry": "workspace:*",
     "next": "15.5.6",
     "postgres": "3.4.7",
     "react": "19.1.1",
     "react-dom": "19.1.1",
-    "zod": "3.25.76",
-    "@bnl/db": "workspace:*",
-    "@bnl/curriculum": "workspace:*",
-    "@bnl/lesson-engine": "workspace:*",
-    "@bnl/storage": "workspace:*"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/react": "19.1.12",

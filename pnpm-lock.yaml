@@ -32,6 +32,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@bnl/assessment':
+        specifier: workspace:*
+        version: link:../../packages/assessment
       '@bnl/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -50,6 +53,12 @@ importers:
       '@bnl/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@bnl/student-progress':
+        specifier: workspace:*
+        version: link:../../packages/student-progress
+      '@bnl/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       next:
         specifier: 15.5.6
         version: 15.5.6(@playwright/test@1.63.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -74,6 +83,18 @@ importers:
         version: 19.1.9(@types/react@19.1.12)
 
   apps/student: {}
+
+  packages/assessment:
+    dependencies:
+      '@bnl/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@bnl/intelligence':
+        specifier: workspace:*
+        version: link:../intelligence
+      '@bnl/lesson-engine':
+        specifier: workspace:*
+        version: link:../lesson-engine
 
   packages/auth:
     dependencies:
