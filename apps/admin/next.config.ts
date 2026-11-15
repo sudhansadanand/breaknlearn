@@ -25,7 +25,11 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return {
-      beforeFiles: [{ source: "/", destination: "/index.html" }],
+      beforeFiles: [
+        { source: "/", destination: "/index.html" },
+        // Concept prototype (static, no data): see apps/prototype.
+        { source: "/prototype", destination: "/prototype/index.html" },
+      ],
     };
   },
 };

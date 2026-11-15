@@ -6,8 +6,8 @@
   "description": "Adult/admin portal (/admin) and BFF API (/api/v1) on the same origin as the student app (ADR-0006).",
   "scripts": {
     "copy-student": "node scripts/copy-student.mjs",
-    "dev": "node scripts/copy-student.mjs && next dev",
-    "build": "node scripts/copy-student.mjs && next build",
+    "dev": "node scripts/copy-student.mjs && node scripts/copy-prototype.mjs && next dev",
+    "build": "node scripts/copy-student.mjs && node scripts/copy-prototype.mjs && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --exclude \"test/integration/**\"",
