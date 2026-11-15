@@ -228,6 +228,15 @@ export class FakeAdultAuth implements AdultAuthProvider {
     if (!entry || entry.password !== password) return null;
     return { token: this.sessionFor(entry.identity), identity: entry.identity, expiresAt: new Date(Date.now() + 3600_000) };
   }
+  /** Like Supabase: existing sessions keep their (stale) claims; only sessions minted afterwards lose the flag. */
+  readonly passwordChanges: { userId: string; accessToken: string }[] = [];
+  async changePassword(input: { accessToken: string; userId: string; newPassword: string }): Promise<void> {
+    const entry = [...this.passwords.values()].find((e) => e.identity.userId === input.userId);
+    if (!entry || this.sessions.get(input.accessToken)?.userId !== input.userId) throw new Error("fake changePassword: bad session");
+    this.passwordChanges.push({ userId: input.userId, accessToken: input.accessToken });
+    entry.password = input.newPassword;
+    entry.identity = { userId: entry.identity.userId, email: entry.identity.email };
+  }
 }
 
 export interface TestEnv {

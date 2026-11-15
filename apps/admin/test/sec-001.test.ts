@@ -130,8 +130,10 @@ describe("SEC-001 pages", () => {
     for (const f of [...portal, "admin/(portal)/layout.tsx"]) {
       expect(readFileSync(join(appDir, f), "utf8"), f).toMatch(/await requireAdultPage\(\)/);
     }
-    // The only admin page outside the gated group is the login page.
-    expect(pageFiles.filter((f) => !f.startsWith("admin/(portal)/"))).toEqual(["admin/login/page.tsx"]);
+    // Outside the gated group: the login page, and the change-password page, which gates itself (it must stay
+    // reachable while a one-time password is pending, so it cannot sit under the portal layout).
+    expect(pageFiles.filter((f) => !f.startsWith("admin/(portal)/")).sort()).toEqual(["admin/change-password/page.tsx", "admin/login/page.tsx"]);
+    expect(readFileSync(join(appDir, "admin/change-password/page.tsx"), "utf8")).toMatch(/await requireAdultPage\(\{ allowPendingPasswordChange: true \}\)/);
   });
 
   it("requireAdultPage redirects for missing and invalid cookies, and passes a valid one", async () => {

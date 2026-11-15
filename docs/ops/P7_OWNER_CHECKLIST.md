@@ -13,7 +13,7 @@ plus where the value is stored.
 - [ ] `bnl_app` password generated and stored. Private bucket `school-syllabi` created (§4).
 
 ## 2. People and access
-- [ ] Owner admin email: ________ (invited through Supabase Auth, no default password).
+- [ ] Owner admin email: admin email provided by owner 2026-11-15, bootstrap with scripts/ops/bootstrap-owner.mjs (`DEPLOYMENT_RUNBOOK.md` §5: one-time password delivered out of band, forced change at first sign-in). Do not write the address here.
 - [ ] Who else gets household (guardian) access: ________.
 - [ ] Who gets staff roles (editor/reviewer/publisher/analyst), if anyone: ________.
 - [ ] Who holds Vercel and Supabase admin access, and how it is protected (2FA).
