@@ -24,6 +24,7 @@ import { requireAdult, requireCsrf, withAdultHousehold } from "../authn";
 import { clientIp, json, readJson, validationFailed, type Ctx } from "../http";
 import { enforceRateLimit } from "../rate-limits";
 import type { DeviceRow } from "../repos";
+import { requireFeature } from "../flags";
 
 const gone = () => new HttpError(410, "not_found", "Pairing expired, already used, or unknown; start again on the TV");
 
@@ -49,6 +50,7 @@ type DeviceCredential = z.infer<typeof DeviceTokenResponse>;
  * it only inserts one pairing row holding hashes (code HMAC, poll-secret sha256).
  */
 export async function createPairingCodeHandler(req: Request, c: Ctx): Promise<Response> {
+  requireFeature("FEATURE_PAIRING", "Pairing");
   await enforceRateLimit(c, "pairingCodeByIp", clientIp(req));
   const now = c.deps.now();
   const p = createPairingCode(c.deps.keys.pairingCode, now, c.deps.uuid);
@@ -64,6 +66,7 @@ const ApproveBody = z.object({ code: z.string().max(32), device_label: ApprovePa
 /** POST /api/v1/devices/pair — owner/guardian approves the TV's code for their own household. */
 export async function approvePairingHandler(req: Request, c: Ctx): Promise<Response> {
   const adult = await requireAdult(req, c);
+  requireFeature("FEATURE_PAIRING", "Pairing");
   requireCsrf(req, c);
   await enforceRateLimit(c, "approveByUser", adult.userId);
   const body = await readJson(req, ApproveBody);
@@ -107,6 +110,7 @@ type RedeemOutcome =
  * verified in constant time) and the device that row was approved into.
  */
 export async function redeemTokenHandler(req: Request, c: Ctx): Promise<Response> {
+  requireFeature("FEATURE_PAIRING", "Pairing");
   await enforceRateLimit(c, "tokenPollByIp", clientIp(req));
   const body = await readJson(req, DeviceTokenRequest);
   const now = c.deps.now();

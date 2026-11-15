@@ -11,6 +11,7 @@ import { json, readJson, validationFailed, type Ctx } from "../http";
 import { buildDashboard, type ChildProfile, type Dashboard, type RecommendationView } from "./dashboard";
 import { analyticsRepo, type RecommendationRow } from "./repo";
 import { RECOMMENDATION_TEXT, type RecommendationCode } from "./intelligence";
+import { requireFeature } from "../flags";
 
 const DAY = 86_400_000;
 export const DEFAULT_ACTIVITY_DAYS = 14;
@@ -77,6 +78,8 @@ const withHousehold = <T>(c: Ctx, adult: AdultIdentity, fn: (sql: Sql, m: Househ
 /** GET /api/v1/admin/analytics/summary?learner_id&from&to */
 export async function summaryHandler(req: Request, c: Ctx): Promise<Response> {
   const adult = await requireAdult(req, c);
+  // After authentication so unauthenticated callers always get 401 (SEC-001).
+  requireFeature("FEATURE_SCORES", "Learning scores");
   const q = parseQuery(req);
   return json(c, await withHousehold(c, adult, (sql, m) => loadDashboard(sql, c, m, q)));
 }
@@ -84,6 +87,7 @@ export async function summaryHandler(req: Request, c: Ctx): Promise<Response> {
 /** GET /api/v1/admin/analytics/learning-scores?learner_id — `items` = topic-level LearningScore (frozen schema); `lessons` additive. */
 export async function learningScoresHandler(req: Request, c: Ctx): Promise<Response> {
   const adult = await requireAdult(req, c);
+  requireFeature("FEATURE_SCORES", "Learning scores");
   const q = parseQuery(req);
   const body = await withHousehold(c, adult, async (sql, m) => {
     const profiles = (await c.deps.repos.profiles.listForHousehold(sql, m.householdId)).filter((p) => q.learnerId === undefined || p.id === q.learnerId);
@@ -114,6 +118,7 @@ function recView(r: RecommendationRow): z.infer<typeof Recommendation> & Pick<Re
 /** GET /api/v1/admin/recommendations?learner_id */
 export async function listRecommendationsHandler(req: Request, c: Ctx): Promise<Response> {
   const adult = await requireAdult(req, c);
+  requireFeature("FEATURE_SCORES", "Learning scores");
   const q = parseQuery(req);
   const items = await withHousehold(c, adult, async (sql, m) => {
     const profiles = (await c.deps.repos.profiles.listForHousehold(sql, m.householdId)).filter((p) => q.learnerId === undefined || p.id === q.learnerId);
@@ -129,6 +134,7 @@ export const DismissRequest = z.object({ undo: z.boolean().optional() }).strict(
 /** POST /api/v1/admin/recommendations/{id}/dismiss */
 export async function dismissRecommendationHandler(req: Request, c: Ctx, id: string): Promise<Response> {
   const adult = await requireAdult(req, c);
+  requireFeature("FEATURE_SCORES", "Learning scores");
   requireCsrf(req, c);
   const hasBody = (req.headers.get("content-length") ?? "") !== "0" && (req.headers.get("content-type") ?? "") !== "";
   const body = hasBody ? await readJson(req, DismissRequest) : {};
