@@ -62,6 +62,12 @@ done
 | 8 | `0008_pairing_device_household.sql` | binds pairing codes to their household (A9-SEC-01) |
 | 9 | `0009_consent_privacy.sql` | consent check, household export, deletion processing (A9-PRIV-01) |
 
+Supabase's `postgres` login is **not** a superuser (it has CREATEROLE). The migrations handle that: they give it a
+usable membership in `bnl_owner` and give `bnl_owner` CREATE on schema `bnl`. The test harness proves it by migrating
+`bnl_fresh_a` as a non-superuser CREATEROLE login. When the direct connection (port 5432) is not reachable, each file
+can instead be sent, wrapped in `begin; … ; commit;`, to the Management API endpoint
+`POST https://api.supabase.com/v1/projects/<ref>/database/query`, which runs as `postgres`.
+
 Then load the **core** seeds only:
 - `supabase/seed/0001_curriculum.sql`;
 - `supabase/seed/0002_multiplication_lessons.sql` (the ten live ×1–×10 lessons and their manifests).

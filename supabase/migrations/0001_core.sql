@@ -34,16 +34,19 @@ end
 $roles$;
 
 grant bnl_public, bnl_device, bnl_adult, bnl_staff, bnl_job to bnl_app;
--- The migrating role must be able to hand ownership of SECURITY DEFINER functions to bnl_owner.
+-- The migrating role must be able to hand ownership of SECURITY DEFINER functions to bnl_owner, which needs
+-- SET ROLE on it. On PostgreSQL 16+ a non-superuser CREATEROLE login (Supabase's `postgres`) is automatically
+-- granted ADMIN on the roles it creates but with SET and INHERIT off, so a membership row alone is not enough:
+-- require SET (to hand over ownership) and INHERIT (later migrations CREATE OR REPLACE functions bnl_owner owns).
 do $own$
 begin
   if not exists (
     select 1 from pg_auth_members m
     join pg_roles g on g.oid = m.roleid
     join pg_roles u on u.oid = m.member
-    where g.rolname = 'bnl_owner' and u.rolname = current_user
+    where g.rolname = 'bnl_owner' and u.rolname = current_user and m.set_option and m.inherit_option
   ) and not (select rolsuper from pg_roles where rolname = current_user) then
-    execute format('grant bnl_owner to %I', current_user);
+    execute format('grant bnl_owner to %I with set true, inherit true', current_user);
   end if;
 end
 $own$;
@@ -51,6 +54,9 @@ $own$;
 create schema if not exists bnl;
 revoke all on schema bnl from public;
 revoke all on schema bnl from anon, authenticated;
+-- ALTER ... OWNER TO bnl_owner (SECURITY DEFINER functions) requires the new owner to hold CREATE on the schema
+-- unless the migrating login is a superuser (it is not on Supabase). bnl_owner is NOLOGIN and not granted to bnl_app.
+grant usage, create on schema bnl to bnl_owner;
 -- Note: schema-level default privileges can only ADD to the global defaults (functions are EXECUTE-able by
 -- PUBLIC by default), so every migration ends with an explicit REVOKE sweep instead (see supabase/README.md).
 

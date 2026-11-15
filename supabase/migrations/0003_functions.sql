@@ -6,6 +6,8 @@
 -- 55000 conflict (wrong state), 23xxx conflict.
 
 -- True for an operations connection (migrations/seeds/owner tooling): the login role is not an app login.
+-- Only memberships that can be used (SET or INHERIT) count: on PostgreSQL 16+ the non-superuser CREATEROLE login
+-- that ran the migrations (Supabase's `postgres`) holds an ADMIN-only membership in every role it created.
 create or replace function bnl._is_ops_session() returns boolean
 language sql stable security definer set search_path = pg_catalog, pg_temp
 as $$
@@ -13,7 +15,8 @@ as $$
     select 1 from pg_auth_members m
     join pg_roles g on g.oid = m.roleid
     join pg_roles u on u.oid = m.member
-    where u.rolname = session_user and g.rolname in ('bnl_public', 'bnl_device', 'bnl_adult', 'bnl_staff', 'bnl_job'))
+    where u.rolname = session_user and (m.set_option or m.inherit_option)
+      and g.rolname in ('bnl_public', 'bnl_device', 'bnl_adult', 'bnl_staff', 'bnl_job'))
 $$;
 
 -- Validates the acting staff user and returns the audit actor_type ('user' | 'system').

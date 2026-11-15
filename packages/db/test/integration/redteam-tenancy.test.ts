@@ -332,8 +332,8 @@ describe("SQL-level role switches from inside a request context", () => {
       expect(r.rolcanlogin, r.rolname).toBe(r.rolname === "bnl_app");
     }
     const members = await admin<{ grp: string }[]>`
-      select g.rolname as grp from pg_auth_members m join pg_roles g on g.oid = m.roleid join pg_roles u on u.oid = m.member
-      where u.rolname = 'bnl_app' order by 1`;
+      select distinct g.rolname as grp from pg_auth_members m join pg_roles g on g.oid = m.roleid join pg_roles u on u.oid = m.member
+      where u.rolname = 'bnl_app' order by 1`; // distinct: the harness migrates as two logins, so grants have two grantors
     expect(members.map((m) => m.grp)).toEqual(["bnl_adult", "bnl_device", "bnl_job", "bnl_public", "bnl_staff"]);
   });
 
