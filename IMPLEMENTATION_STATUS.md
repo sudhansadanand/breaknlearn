@@ -59,7 +59,7 @@ Known P2 limits: Supabase Storage driver is unit-tested against a fake only (no 
 | all suites | `pnpm test` / `pnpm test:integration` | admin 201, assessment 24; db 44/44, admin 64/64 |
 | live regression + student bytes | `pnpm test:e2e`, `test:served` | 9/9, unchanged |
 
-P4 defaults needing owner sign-off: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
+P4 defaults **approved by owner 2026-11-15**: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
 
 ## P3 gate evidence (2026-11-14)
 
@@ -102,9 +102,9 @@ Findings: A9-SEC-01 (pairing code could point at another household's device at S
 |---|---|---|
 | Git repository | ✅ `sudhansadanand/breaknlearn` | — |
 | Supabase projects (dev/stage/prod), billing | ❓ not provided | Local Postgres/Supabase only |
-| Adult admin email | ❓ not provided | Seeded synthetic owner in local dev only |
+| Adult admin email | ✅ provided 2026-11-15 (not stored in repo; passed to `scripts/ops/bootstrap-owner.mjs` at setup) | One-time generated password, forced change at first sign-in |
 | `/admin` vs separate domain | ❓ not confirmed | `/admin` on same origin (ADR-0006) |
-| Consent text / retention | ❓ not confirmed | Raw telemetry 90 d, aggregates 13 mo, consent record per guardian |
+| Consent text / retention | ⏳ consent wording drafted by Claude for owner approval (docs/privacy/CONSENT_TEXT.md); retention not answered | Raw telemetry 90 d, aggregates 13 mo |
 | School name / textbook TOCs | ❓ not provided | Import tested with synthetic files |
 | Production deploy permission | ⛔ not given | Nothing deployed |
 | Vercel project read access / deployment id | ❓ | Live site only read over public HTTPS |
