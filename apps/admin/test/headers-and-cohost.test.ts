@@ -66,10 +66,15 @@ describe("student co-hosting (ADR-0006)", () => {
     }
   });
 
-  it("next.config rewrites / to the student index.html before routes and pages", async () => {
+  it("next.config rewrites / to the student index.html (and /prototype to the static prototype) before routes and pages", async () => {
     expect(nextConfig.rewrites).toBeTypeOf("function");
     const rewrites = await nextConfig.rewrites?.();
-    expect(rewrites).toEqual({ beforeFiles: [{ source: "/", destination: "/index.html" }] });
+    expect(rewrites).toEqual({
+      beforeFiles: [
+        { source: "/", destination: "/index.html" },
+        { source: "/prototype", destination: "/prototype/index.html" },
+      ],
+    });
   });
 
   it("the build copy is gitignored and there is no app route for /", () => {
