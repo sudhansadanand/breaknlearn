@@ -3,6 +3,8 @@ import { Me } from "@bnl/contracts";
 import { z } from "zod";
 import { requireAdult, requireCsrf, withAdultHousehold } from "../authn";
 import { json, readJson, type Ctx } from "../http";
+import { CONSENT_SCOPES } from "../privacy/consent-text";
+import { consentState } from "../privacy/consent";
 
 /** GET /api/v1/admin/me */
 export async function meHandler(req: Request, c: Ctx): Promise<Response> {
@@ -19,34 +21,66 @@ export async function meHandler(req: Request, c: Ctx): Promise<Response> {
   return json(c, me);
 }
 
-/** OpenAPI recordConsent body (not yet a named contracts schema; see docs/adr/proposals/A2-*.md). */
+/**
+ * OpenAPI recordConsent body. `scopes` is additive (A9-PRIV-01): omitted, a grant or a revoke covers all three scopes,
+ * so the original `{consent_version, decision}` body stays valid.
+ */
 export const ConsentRequest = z.object({
-  consent_version: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/),
+  consent_version: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9._-]+$/),
   decision: z.enum(["grant", "revoke"]),
+  scopes: z.array(z.enum(CONSENT_SCOPES)).min(1).max(CONSENT_SCOPES.length).optional(),
 });
 
-/** POST /api/v1/admin/consent — guardian/owner records consent for their household. */
+/** GET /api/v1/admin/consent — owner/guardian: the household's consent per scope and the current notice version. */
+export async function getConsentHandler(req: Request, c: Ctx): Promise<Response> {
+  const adult = await requireAdult(req, c);
+  const state = await withAdultHousehold(c, adult, async (sql, m) => consentState(await c.deps.repos.consent.active(sql, m.householdId)));
+  return json(c, state);
+}
+
+/**
+ * POST /api/v1/admin/consent — owner/guardian grants or withdraws consent for their household, per scope.
+ * Grant is idempotent per (scope, version); withdrawal revokes every active grant of the scope in the household
+ * (whoever gave it) and takes effect on the next device request. Audited without names.
+ */
 export async function consentHandler(req: Request, c: Ctx): Promise<Response> {
   const adult = await requireAdult(req, c);
   requireCsrf(req, c);
   const body = await readJson(req, ConsentRequest);
+  const scopes = CONSENT_SCOPES.filter((s) => (body.scopes ?? CONSENT_SCOPES).includes(s));
   const now = c.deps.now();
-  const changed = await withAdultHousehold(c, adult, async (sql, m) => {
-    const args = { householdId: m.householdId, userId: adult.userId, consentVersion: body.consent_version, at: now };
-    let n = 1;
-    if (body.decision === "grant") await c.deps.repos.consent.grant(sql, args);
-    else n = await c.deps.repos.consent.revoke(sql, args);
+  const { changed, state } = await withAdultHousehold(c, adult, async (sql, m) => {
+    const active = await c.deps.repos.consent.active(sql, m.householdId);
+    const changedScopes: string[] = [];
+    for (const scope of scopes) {
+      const args = { householdId: m.householdId, userId: adult.userId, consentVersion: body.consent_version, at: now, scope };
+      if (body.decision === "grant") {
+        if (active.some((r) => r.scope === scope && r.consentVersion === body.consent_version)) continue;
+        await c.deps.repos.consent.grant(sql, args);
+        changedScopes.push(scope);
+      } else if ((await c.deps.repos.consent.revoke(sql, args)) > 0) {
+        changedScopes.push(scope);
+      }
+    }
     await c.deps.repos.audit.insert(sql, {
       actorAuthId: adult.userId,
       householdId: m.householdId,
       action: body.decision === "grant" ? "consent.granted" : "consent.revoked",
       targetType: "consent_record",
       targetId: null,
-      metadata: { consent_version: body.consent_version, role: m.role, changed: n },
+      metadata: { consent_version: body.consent_version, role: m.role, scopes, changed_scopes: changedScopes, changed: changedScopes.length },
     });
-    return n;
+    return { changed: changedScopes, state: consentState(await c.deps.repos.consent.active(sql, m.householdId)) };
   });
-  return json(c, { consent_version: body.consent_version, decision: body.decision, recorded_at: now.toISOString(), changed: changed > 0 });
+  return json(c, {
+    consent_version: body.consent_version,
+    decision: body.decision,
+    scopes,
+    changed_scopes: changed,
+    recorded_at: now.toISOString(),
+    changed: changed.length > 0,
+    state,
+  });
 }
 
 /** /api/v1/admin/* not yet implemented: 401 without a session, 404 with one (never a data leak). */

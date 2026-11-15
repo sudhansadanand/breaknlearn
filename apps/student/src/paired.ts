@@ -165,6 +165,8 @@ export function createPaired(deps: PairedDeps): Paired {
   let lastTelemetryFlush = deps.now();
   let lastProgressFlush = 0;
   let lastCatalogFetch = 0;
+  /** After consent_required, wait before asking again (a parent has to act on the Privacy page first). */
+  let importRetryAt = 0;
   let refreshWaiters: ((ok: boolean) => void)[] | null = null;
   let session: { id: string; seq: number; learner: string } | null = null;
   let heartbeatMs = 0;
@@ -518,6 +520,9 @@ export function createPaired(deps: PairedDeps): Paired {
         r.receipt = res.body;
         writeJson(store, IMPORT_KEY, runs);
         pullProgress();
+      } else if (isConsentRequired(res)) {
+        // Consent not given yet: keep the run pending with the same key and retry in 10 minutes.
+        importRetryAt = deps.now() + 10 * 60000;
       } else if (res.status === 409 || res.status === 422 || res.status === 403 || res.status === 413) {
         r.status = "failed";
         r.receipt = isObject(res.body) ? res.body : null;
@@ -604,8 +609,23 @@ export function createPaired(deps: PairedDeps): Paired {
 
   function sendBatch(events: QueuedEvent[], key: string, done: (ack: ReturnType<typeof ackOrNull>) => void) {
     authed("POST", "/telemetry/batch", { events: events }, { "Idempotency-Key": key }, function (res) {
+      if (isConsentRequired(res)) {
+        // No consent for this household: drop the batch so activity recorded while consent was off is never
+        // uploaded later (privacy). Play continues; nothing is shown to the child.
+        const ids: { event_id: string | null; code: string }[] = [];
+        for (let i = 0; i < events.length; i++) ids.push({ event_id: events[i].event_id, code: "consent_required" });
+        done({ accepted: [], duplicates: [], rejected: ids });
+        return;
+      }
       done(ackOrNull(res));
     });
+  }
+
+  /** 403 with error code consent_required (the household has not given, or withdrew, consent). */
+  function isConsentRequired(res: HttpResponse): boolean {
+    if (res.status !== 403 || !isObject(res.body)) return false;
+    const err = (res.body as { error?: unknown }).error;
+    return isObject(err) && (err as { code?: unknown }).code === "consent_required";
   }
 
   /** Anything but a valid ack (offline, 401, 429, 503 feature_disabled, …) is retried with backoff. */
@@ -638,7 +658,7 @@ export function createPaired(deps: PairedDeps): Paired {
     }
     if (outbox.pending() > 0 && now - lastProgressFlush >= 10000) flushNow();
     if (now - lastCatalogFetch >= 30 * 60000) refreshCatalog();
-    for (let i = 0; i < runs.length; i++) {
+    for (let i = 0; i < runs.length && now >= importRetryAt; i++) {
       if (runs[i].status === "pending") {
         runImport(function () {});
         return;

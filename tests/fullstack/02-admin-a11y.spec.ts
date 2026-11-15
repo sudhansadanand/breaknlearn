@@ -43,7 +43,7 @@ test("SEC-009: repeated failed sign-ins for one email are rate limited (429) wit
   expect(statuses.slice(5)).toEqual([429, 429]);
 });
 
-const PAGES = ["/admin", "/admin/devices", "/admin/children", "/admin/curriculum", "/admin/imports", "/admin/lessons", "/admin/analytics"];
+const PAGES = ["/admin", "/admin/devices", "/admin/children", "/admin/curriculum", "/admin/imports", "/admin/lessons", "/admin/analytics", "/admin/privacy"];
 
 for (const path of PAGES) {
   test(`portal page ${path}`, async ({ browser }) => {
@@ -68,7 +68,7 @@ test("a lesson editor page", async ({ browser }) => {
 
 test("portal works at 200% zoom-equivalent width without horizontal scrolling of the page", async ({ browser }) => {
   const page = await (await guardianContext(browser, { viewport: { width: 640, height: 900 } })).newPage();
-  for (const path of ["/admin", "/admin/devices", "/admin/children", "/admin/analytics"]) {
+  for (const path of ["/admin", "/admin/devices", "/admin/children", "/admin/analytics", "/admin/privacy"]) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, path).toBeLessThanOrEqual(1);

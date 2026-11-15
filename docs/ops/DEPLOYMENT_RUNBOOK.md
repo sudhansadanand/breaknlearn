@@ -60,6 +60,7 @@ done
 | 6 | `0006_assessments.sql` | assessment guards |
 | 7 | `0007_analytics.sql` | analytics purge and scoring support |
 | 8 | `0008_pairing_device_household.sql` | binds pairing codes to their household (A9-SEC-01) |
+| 9 | `0009_consent_privacy.sql` | consent check, household export, deletion processing (A9-PRIV-01) |
 
 Then load the **core** seeds only:
 - `supabase/seed/0001_curriculum.sql`;
@@ -94,17 +95,43 @@ Verify:
 
 ## 5. First owner and household
 
-1. Invite the owner's admin email through Supabase Auth, with no default password. The email comes from the owner checklist.
-2. After the owner's first sign-in, create the household and the owner membership as one audited operation, using the migration login:
-   ```sql
-   begin;
-   set local role bnl_owner;
-   select set_config('bnl.actor_id', '<auth user id of the owner>', true);
-   select bnl.create_household('<household label, no child names>', 'Asia/Kolkata');
-   commit;
+The owner's admin account starts with a **generated one-time password** that the owner must replace at first
+sign-in. The owner's email is supplied at run time only (`--email` or `BNL_OWNER_EMAIL`); it is never written to the
+repo, a ticket or this runbook. Take it from the owner checklist (§2), which records only that it was provided.
+
+1. On the operator's machine, with the values from the secret stores in the shell environment only (not in a file):
+   ```sh
+   export SUPABASE_URL='https://<project>.supabase.co'           # https is required
+   export SUPABASE_SERVICE_ROLE_KEY='<service-role key>'         # server-only; never in Vercel client env
+   export BNL_MIGRATION_DB_URL='<direct postgres URL, migration login>'
+   node scripts/ops/bootstrap-owner.mjs --email '<owner admin email>' --household-name 'Our family' --dry-run
+   node scripts/ops/bootstrap-owner.mjs --email '<owner admin email>' --household-name 'Our family'
    ```
-3. The owner records consent in the portal (`POST /api/v1/admin/consent`), then creates child profiles (`/admin/children`).
+   - The script creates the Supabase Auth user (email confirmed) with a 24-character crypto-random password and
+     `app_metadata.bnl_must_change_password = true`. If the user exists but has **never signed in**, the password is
+     reset the same way, so a lost one-time password is recovered by re-running. A user who has already signed in
+     is left untouched, and no password is printed.
+   - In one transaction (advisory lock, `bnl_owner`), it creates the household and the `owner` membership through
+     `bnl.create_household` (audited as `household.create`), unless the user already owns a household. Re-running is a
+     no-op.
+   - The one-time password is printed **once**, to stdout, at the end. Nothing else prints it, logs it or writes it to a
+     file. Copy it into the password manager, give it to the owner out of band (in person or by phone, never in the
+     same channel as the email address), then clear the terminal (`clear && history -c` or close it). Do not run the
+     script with stdout redirected to a file.
+   - `--dry-run` reports what would happen and changes nothing. A plain-http `SUPABASE_URL` is refused, except for a
+     local Supabase with `--allow-insecure-local`.
+2. The owner signs in at `/admin/login` with the one-time password and is sent to `/admin/change-password`. Until the
+   owner chooses a new password (≥ 12 characters, different from the current one, not containing the part of the
+   email before the @), every adult API returns `403 forbidden` with `details.reason = "password_change_required"`
+   (except `GET /api/v1/admin/me`, `POST /api/v1/auth/password` and `POST /api/v1/auth/logout`), and every portal
+   page redirects to the change-password page. The change clears the flag through the GoTrue admin API, rotates the
+   session cookie and writes an `auth.password_changed` audit row (without the password). This needs
+   `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` in the Vercel server environment (§6).
+3. The owner reads the notice on `/admin/privacy` and gives consent there **before pairing any TV and before turning on the telemetry or assessment flags** (pairing, sync, telemetry and quizzes return 403 `consent_required` without it), then creates child profiles (`/admin/children`).
 4. Staff roles (editor/reviewer/publisher/analyst) are rows in `bnl.staff_roles`. Grant them only on written request, and never to the household owner by default (ADR-0003).
+
+Locally, `BNL_DEV_AUTH=true` with `BNL_DEV_AUTH_MUST_CHANGE=true` (or a comma-separated list of the synthetic emails)
+starts the dev users with the same flag, so the forced-change flow can be tried without Supabase.
 
 ## 6. Vercel environment (per `.env.example`)
 
@@ -114,7 +141,7 @@ Server-only values must never be `NEXT_PUBLIC_`.
 | Variable | Production value |
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | from §1 |
-| `SUPABASE_SERVICE_ROLE_KEY` | from §1. Server only (Storage) |
+| `SUPABASE_SERVICE_ROLE_KEY` | from §1. Server only (Storage; clearing the forced-password-change flag, §5) |
 | `SUPABASE_JWT_SECRET` | optional. Empty means JWKS |
 | `APP_ORIGIN`, `ADMIN_ORIGIN` | the production origin (same value, ADR-0006). The Origin/CSRF check depends on it |
 | `DEVICE_TOKEN_SIGNING_SECRET` | ≥32 random bytes, base64, unique per environment. Rotating it signs every TV out (they re-pair) |
@@ -139,6 +166,7 @@ GitHub Actions `schedule` or another scheduler the owner approves. Vercel Cron c
 | nightly 00:30 | `node scripts/jobs/aggregate-sessions.mjs` (defaults to yesterday) | must finish before scoring |
 | nightly 01:30, after aggregation succeeds | `node scripts/jobs/score-learners.mjs` (defaults to yesterday) | idempotent per (learner, lesson, as-of, weights) |
 | daily 02:30 | `node scripts/jobs/score-retention-purge.mjs` | raw telemetry > 90 d, aggregates > 395 d |
+| nightly 03:00 | `node scripts/jobs/process-deletion-requests.mjs` | parent deletion requests (target ≤ 7 days); needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to remove school uploads; exit 1 = a request failed and will be retried |
 
 - Re-running any job for the same day is safe (OPS-004).
 - Alert when a job exits non-zero or misses a run (`MONITORING.md`).
@@ -148,13 +176,13 @@ GitHub Actions `schedule` or another scheduler the owner approves. Vercel Cron c
 Change one flag at a time. Redeploy (flags are read from the environment) and watch `MONITORING.md` for at least
 24 h before the next step. To roll back, set the flag to `false` again.
 
-1. **Deploy with all flags off.** The admin portal is behind auth. The student bundle at `/` must be byte-identical to the live app (`pnpm --filter @bnl/admin test:served`), and `/api/v1/student/config` reports `paired: false`, so every TV behaves exactly as today.
-2. `FEATURE_PAIRING=true`. Note: today this flag is **not enforced** (A9-OPS-01); pairing is reachable whenever `FEATURE_STUDENT_PAIRED` is on. Apply the proposal fix first, or treat steps 2 and 3 as one step.
+1. **Deploy with all flags off.** The admin portal is behind auth. The student bundle at `/` is the ES5 port verified by `pnpm --filter @bnl/admin test:served` (logo and music byte-identical to the live app; the parity suite proves identical behaviour), and `/api/v1/student/config` reports `paired_mode: false`, so every TV behaves exactly as today.
+2. `FEATURE_PAIRING=true` (enforced: pairing endpoints return 503 while off).
 3. `FEATURE_STUDENT_PAIRED=true`. TVs show "Family account". Pair **one** owner TV, link explorers, and confirm the legacy import (no lost ×3 records, MIG-002).
 4. `FEATURE_TELEMETRY=true`. Watch the ingest rejection and duplicate ratios. Enable the nightly aggregation.
 5. `FEATURE_ASSESSMENTS=true`. Watch the server-scored quiz flow.
-6. `FEATURE_SCORES=true` plus the scoring job. Same caveat as step 2: the flag is not enforced today, so the analytics page is visible to adults as soon as it is deployed. Scores stay empty until the job runs.
-7. `FEATURE_CATALOG_API=true` (content publishing to TVs). Not enforced today (A9-OPS-01).
+6. `FEATURE_SCORES=true` plus the scoring job. While off, the analytics API returns 503 and the page says scores are not enabled. Scores stay empty until the job runs.
+7. `FEATURE_CATALOG_API=true` (content publishing to TVs). While off, TVs keep their built-in ×1–×10.
 8. `FEATURE_STUDENT_SW` stays `true`. Set it to `false` only as the kill switch (`ROLLBACK.md` §2).
 
 ## 9. Post-deploy smoke (each step)

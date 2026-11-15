@@ -13,7 +13,7 @@ Single source of truth for progress, blockers and verified commands. Unrun = NOT
 | P3 | Student runtime: catalog consumer, offline cache, legacy import | ✅ ready for review (paired mode off unless `FEATURE_STUDENT_PAIRED`) | `p3/student-app` |
 | P4 | Telemetry queue/ingest, progress sync, assessments | ✅ ready for review (flags `FEATURE_TELEMETRY`, `FEATURE_ASSESSMENTS` off) | `p4/telemetry-sync` |
 | P5 | ELS engine, parent analytics, recommendations | ✅ ready for review | `p5/analytics-int` |
-| P6 | E2E, security review, runbooks, LG test plan | ✅ ready for review (A9-SEC-01, A9-OPS-01 fixed; A9-PRIV-01 consent gating open) | `p6/qa-ops` |
+| P6 | E2E, security review, runbooks, LG test plan | ✅ ready for review (A9-SEC-01, A9-OPS-01, A9-PRIV-01 fixed; consent wording awaiting owner approval) | `p6/qa-ops` |
 | P7 | Owner-gated production rollout | ⛔ needs written owner approval | — |
 
 ## P0 gate evidence (2026-11-14, Node 22.23, pnpm 10.28)
@@ -59,7 +59,7 @@ Known P2 limits: Supabase Storage driver is unit-tested against a fake only (no 
 | all suites | `pnpm test` / `pnpm test:integration` | admin 201, assessment 24; db 44/44, admin 64/64 |
 | live regression + student bytes | `pnpm test:e2e`, `test:served` | 9/9, unchanged |
 
-P4 defaults needing owner sign-off: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
+P4 defaults **approved by owner 2026-11-15**: review ladder 3→7→14→30 days (first check local midnight +3 d), pass mark 80%, 6-hour answer window, 3–5 questions per stage.
 
 ## P3 gate evidence (2026-11-14)
 
@@ -94,7 +94,7 @@ Not built yet: `GET /admin/analytics/content-quality` (editor report, falls thro
 | rollback_rehearsed | `pnpm rehearse:rollback`, `pnpm rehearse:backup` | 22/22 steps; restore identical (42 tables, 333 rows, 183 policies, 54 functions) |
 | all_CI_green | local: lint, typecheck, test (admin 259), build, test:served, test:e2e 39/39 | pass; CI on the PR |
 
-Findings: A9-SEC-01 (pairing code could point at another household's device at SQL level) fixed by migration 0008; A9-OPS-01 (FEATURE_PAIRING / FEATURE_CATALOG_API / FEATURE_SCORES documented but unenforced) fixed, 503 `feature_disabled` when off; A9-PRIV-01 (consent recorded but not enforced, no self-service export/delete) **open**, design in docs/adr/proposals/A9-qa-ops.md §7, interim operator deletion procedure in scripts/ops/sql. axe-core not added (focused WCAG checks in tests/a11y instead). Traceability: docs/ops/ACCEPTANCE_TRACE.md. Owner checklist for P7: docs/ops/P7_OWNER_CHECKLIST.md.
+Findings: A9-SEC-01 (pairing code could point at another household's device at SQL level) fixed by migration 0008; A9-OPS-01 (FEATURE_PAIRING / FEATURE_CATALOG_API / FEATURE_SCORES documented but unenforced) fixed, 503 `feature_disabled` when off; A9-PRIV-01 fixed in the owner/consent follow-up: consent enforced (403 `consent_required`), self-service export and deletion on `/admin/privacy`, nightly `process-deletion-requests.mjs`; consent wording v1 is a DRAFT awaiting owner approval (docs/privacy/CONSENT_TEXT.md). axe-core not added (focused WCAG checks in tests/a11y instead). Traceability: docs/ops/ACCEPTANCE_TRACE.md. Owner checklist for P7: docs/ops/P7_OWNER_CHECKLIST.md.
 
 ## Owner inputs (spec §14)
 
@@ -102,9 +102,9 @@ Findings: A9-SEC-01 (pairing code could point at another household's device at S
 |---|---|---|
 | Git repository | ✅ `sudhansadanand/breaknlearn` | — |
 | Supabase projects (dev/stage/prod), billing | ❓ not provided | Local Postgres/Supabase only |
-| Adult admin email | ❓ not provided | Seeded synthetic owner in local dev only |
+| Adult admin email | ✅ provided 2026-11-15 (not stored in repo; passed to `scripts/ops/bootstrap-owner.mjs` at setup) | One-time generated password, forced change at first sign-in |
 | `/admin` vs separate domain | ❓ not confirmed | `/admin` on same origin (ADR-0006) |
-| Consent text / retention | ❓ not confirmed | Raw telemetry 90 d, aggregates 13 mo, consent record per guardian |
+| Consent text / retention | ⏳ consent wording drafted by Claude for owner approval (docs/privacy/CONSENT_TEXT.md); retention not answered | Raw telemetry 90 d, aggregates 13 mo |
 | School name / textbook TOCs | ❓ not provided | Import tested with synthetic files |
 | Production deploy permission | ⛔ not given | Nothing deployed |
 | Vercel project read access / deployment id | ❓ | Live site only read over public HTTPS |

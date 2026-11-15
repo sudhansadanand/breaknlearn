@@ -1,6 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
-import type { AdultAuthProvider, AdultIdentity, AdultSession } from "./adult-auth";
+import type { AdultAuthProvider, AdultIdentity, AdultSession, ChangePasswordInput } from "./adult-auth";
 import { identityFromClaims } from "./adult-auth";
 import { ConfigError, MIN_SECRET_BYTES } from "./secrets";
 
@@ -9,6 +9,10 @@ import { ConfigError, MIN_SECRET_BYTES } from "./secrets";
  * It refuses to exist in production and has no built-in password: the shared
  * synthetic-user password comes from BNL_DEV_AUTH_PASSWORD on the developer's
  * machine. Users are synthetic and must match the local DB seed.
+ *
+ * BNL_DEV_AUTH_MUST_CHANGE=true (or a comma-separated list of the synthetic emails) starts those users with the
+ * forced-password-change flag, so the owner first-sign-in flow can be exercised locally. Password changes live in
+ * process memory only and reset on restart.
  */
 
 export const DEV_SESSION_AUDIENCE = "bnl:dev-admin";
@@ -23,13 +27,23 @@ export const DEV_SYNTHETIC_USERS = [
   { userId: "33333333-3333-4333-8333-333333333333", email: "outsider@bnl.test" },
 ] as const satisfies readonly AdultIdentity[];
 
-export interface DevUserSeed extends AdultIdentity {
+export interface DevUserSeed {
+  readonly userId: string;
+  readonly email: string;
   readonly password: string;
+  readonly mustChangePassword?: boolean;
 }
 
-interface StoredUser extends AdultIdentity {
-  readonly salt: Buffer;
-  readonly hash: Buffer;
+interface StoredUser {
+  readonly userId: string;
+  readonly email: string;
+  salt: Buffer;
+  hash: Buffer;
+  mustChangePassword: boolean;
+}
+
+function toIdentity(u: StoredUser): AdultIdentity {
+  return { userId: u.userId, email: u.email, ...(u.mustChangePassword ? { mustChangePassword: true as const } : {}) };
 }
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 } as const;
@@ -78,7 +92,12 @@ export class DevAuthProvider implements AdultAuthProvider {
       if (u.password.length < DEV_MIN_PASSWORD_LENGTH) {
         throw new ConfigError(`dev user password must be at least ${DEV_MIN_PASSWORD_LENGTH} characters`);
       }
-      this.users.set(u.email.toLowerCase(), { userId: u.userId, email: u.email.toLowerCase(), ...hashPassword(u.password) });
+      this.users.set(u.email.toLowerCase(), {
+        userId: u.userId,
+        email: u.email.toLowerCase(),
+        ...hashPassword(u.password),
+        mustChangePassword: u.mustChangePassword === true,
+      });
     }
     this.dummy = hashPassword(randomBytes(16).toString("hex"));
     this.sessionKey = opts.sessionKey;
@@ -92,10 +111,12 @@ export class DevAuthProvider implements AdultAuthProvider {
     if (password === undefined || password.length < DEV_MIN_PASSWORD_LENGTH) {
       throw new ConfigError(`BNL_DEV_AUTH_PASSWORD must be set (≥${DEV_MIN_PASSWORD_LENGTH} chars) to use DevAuthProvider`);
     }
+    const flag = (env.BNL_DEV_AUTH_MUST_CHANGE ?? "").trim().toLowerCase();
+    const flagged = new Set(flag === "true" ? DEV_SYNTHETIC_USERS.map((u) => u.email) : flag.split(",").map((e) => e.trim()).filter(Boolean));
     return new DevAuthProvider({
       env,
       sessionKey,
-      users: DEV_SYNTHETIC_USERS.map((u) => ({ ...u, password })),
+      users: DEV_SYNTHETIC_USERS.map((u) => ({ ...u, password, mustChangePassword: flagged.has(u.email) })),
       ...(now ? { now } : {}),
     });
   }
@@ -115,7 +136,7 @@ export class DevAuthProvider implements AdultAuthProvider {
       .setIssuedAt(iat)
       .setExpirationTime(exp)
       .sign(this.sessionKey);
-    return { token, identity: { userId: user.userId, email: user.email }, expiresAt: new Date(exp * 1000) };
+    return { token, identity: toIdentity(user), expiresAt: new Date(exp * 1000) };
   }
 
   async verifySession(token: string): Promise<AdultIdentity | null> {
@@ -128,11 +149,22 @@ export class DevAuthProvider implements AdultAuthProvider {
         currentDate: this.now(),
       });
       const identity = identityFromClaims(payload);
-      // Only currently seeded users are valid (a removed user loses access immediately).
-      return identity && this.users.get(identity.email)?.userId === identity.userId ? identity : null;
+      // Only currently seeded users are valid (a removed user loses access immediately). The must-change flag
+      // is read from live state, so it clears as soon as the password is changed.
+      const user = identity ? this.users.get(identity.email) : undefined;
+      return identity && user?.userId === identity.userId ? toIdentity(user) : null;
     } catch {
       // Dev sessions are verified locally with no I/O: every failure is a token rejection.
       return null;
     }
+  }
+
+  async changePassword(input: ChangePasswordInput): Promise<void> {
+    const identity = await this.verifySession(input.accessToken);
+    if (!identity || identity.userId !== input.userId) throw new Error("dev changePassword: session does not match user");
+    if (input.newPassword.length < DEV_MIN_PASSWORD_LENGTH) throw new Error("dev changePassword: password too short");
+    const user = this.users.get(identity.email);
+    if (!user) throw new Error("dev changePassword: unknown user");
+    Object.assign(user, hashPassword(input.newPassword), { mustChangePassword: false });
   }
 }

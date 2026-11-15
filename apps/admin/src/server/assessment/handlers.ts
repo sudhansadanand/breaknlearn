@@ -26,6 +26,7 @@ import {
 import { FinishAssessmentResponse, StartAssessmentRequest, StartAssessmentResponse, SubmitAnswerRequest, SubmitAnswerResponse, Uuid, type DeviceTokenClaims } from "@bnl/contracts";
 import type { z } from "zod";
 import { verifyDeviceBearer, withDevice } from "../authn";
+import { requireDeviceConsent } from "../privacy/gate";
 import type { Sql } from "../db-port";
 import { json, validationFailed, type Ctx } from "../http";
 import { readBoundedJson } from "../learning/common";
@@ -99,8 +100,9 @@ export async function startAssessmentHandler(req: Request, c: Ctx): Promise<Resp
   const repo = assessmentRepo();
   const now = c.deps.now();
 
-  const out = await withDevice(c, claims, (sql) =>
-    maybeIdempotent(sql, repo, { scope: "assessment.start", key, ownerId: claims.sub, householdId: claims.hid, request: raw, now }, async () => {
+  const out = await withDevice(c, claims, async (sql) => {
+    await requireDeviceConsent(sql, ["learning_data"]);
+    return maybeIdempotent(sql, repo, { scope: "assessment.start", key, ownerId: claims.sub, householdId: claims.hid, request: raw, now }, async () => {
       await assertLearner(sql, repo, claims, body.learner_id);
 
       // Natural idempotency: the same client_attempt_id returns the same attempt and questions.
@@ -151,8 +153,8 @@ export async function startAssessmentHandler(req: Request, c: Ctx): Promise<Resp
         status: selection.status,
       });
       return { status: 201, body: res, replayed: false };
-    }),
-  );
+    });
+  });
   return reply(c, out);
 }
 
@@ -193,8 +195,9 @@ export async function submitAnswerHandler(req: Request, c: Ctx, attemptIdRaw: st
   const repo = assessmentRepo();
   const now = c.deps.now();
 
-  const out = await withDevice(c, claims, (sql) =>
-    maybeIdempotent(sql, repo, { scope: "assessment.answer", key, ownerId: claims.sub, householdId: claims.hid, request: { attempt_id: attemptId, ...body }, now }, async () => {
+  const out = await withDevice(c, claims, async (sql) => {
+    await requireDeviceConsent(sql, ["learning_data"]);
+    return maybeIdempotent(sql, repo, { scope: "assessment.answer", key, ownerId: claims.sub, householdId: claims.hid, request: { attempt_id: attemptId, ...body }, now }, async () => {
       const attempt = await repo.attemptForUpdate(sql, attemptId);
       if (!attempt) throw forbiddenAttempt();
 
@@ -230,8 +233,8 @@ export async function submitAnswerHandler(req: Request, c: Ctx, attemptIdRaw: st
         already_answered: scored.alreadyAnswered,
       });
       return { status: 200, body: res, replayed: false };
-    }),
-  );
+    });
+  });
   return reply(c, out);
 }
 
@@ -248,8 +251,9 @@ export async function finishAssessmentHandler(req: Request, c: Ctx, attemptIdRaw
   const repo = assessmentRepo();
   const now = c.deps.now();
 
-  const out = await withDevice(c, claims, (sql) =>
-    maybeIdempotent(sql, repo, { scope: "assessment.finish", key, ownerId: claims.sub, householdId: claims.hid, request: { attempt_id: attemptId }, now }, async () => {
+  const out = await withDevice(c, claims, async (sql) => {
+    await requireDeviceConsent(sql, ["learning_data"]);
+    return maybeIdempotent(sql, repo, { scope: "assessment.finish", key, ownerId: claims.sub, householdId: claims.hid, request: { attempt_id: attemptId }, now }, async () => {
       const attempt = await repo.attemptForUpdate(sql, attemptId);
       if (!attempt) throw forbiddenAttempt();
       if (attempt.finishedAt !== null) {
@@ -259,8 +263,8 @@ export async function finishAssessmentHandler(req: Request, c: Ctx, attemptIdRaw
       const finished = await repo.finishAttempt(sql, attempt.id, now).catch(mapDbError);
       await scheduleAfterFinish(sql, repo, claims, finished, now);
       return { status: 200, body: await finishBody(sql, repo, finished), replayed: false };
-    }),
-  );
+    });
+  });
   return reply(c, out);
 }
 

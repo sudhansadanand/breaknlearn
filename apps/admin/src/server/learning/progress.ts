@@ -8,6 +8,7 @@ import { PageQuery, ProgressState, ProgressSyncRequest, ProgressSyncResponse, Uu
 import { mergeProgress, slideIndexOf } from "@bnl/student-progress";
 import type { z } from "zod";
 import { hasBearer, requireAdult, verifyDeviceBearer, withAdultHousehold, withDevice } from "../authn";
+import { requireDeviceConsent } from "../privacy/gate";
 import type { Sql } from "../db-port";
 import { json, validationFailed, type Ctx } from "../http";
 import { enforceLearningRateLimit, readBoundedJson, requireIdempotencyKey } from "./common";
@@ -51,12 +52,13 @@ export async function progressSyncHandler(req: Request, c: Ctx): Promise<Respons
   const repo = learningRepo();
   const now = c.deps.now();
 
-  const result = await withDevice(c, claims, (sql) =>
-    idempotent(sql, repo, { scope: "progress.sync", key, ownerId: claims.sub, householdId: claims.hid, requestSha256: requestSha(raw), now }, async () => {
+  const result = await withDevice(c, claims, async (sql) => {
+    await requireDeviceConsent(sql, ["learning_data"]);
+    return idempotent(sql, repo, { scope: "progress.sync", key, ownerId: claims.sub, householdId: claims.hid, requestSha256: requestSha(raw), now }, async () => {
       await assertLearnerInHousehold(sql, repo, claims.hid, body.learner_id);
       return { status: 200, body: await applySync(sql, repo, claims, body) };
-    }),
-  );
+    });
+  });
   return json(c, result.body, result.status, result.replayed ? { [REPLAY_HEADER]: "true" } : {});
 }
 

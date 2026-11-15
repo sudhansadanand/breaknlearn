@@ -12,6 +12,9 @@ export const POLICIES = {
   approveByUser: { limit: 10, windowSeconds: 600 },
   loginByIp: { limit: 10, windowSeconds: 900 },
   loginByEmail: { limit: 5, windowSeconds: 900 },
+  /** POST /api/v1/auth/password: each attempt verifies the current password, so it is bounded like login. */
+  passwordChangeByIp: { limit: 10, windowSeconds: 900 },
+  passwordChangeByUser: { limit: 5, windowSeconds: 900 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export async function enforceRateLimit(c: Ctx, scope: keyof typeof POLICIES, identifier: string): Promise<void> {

@@ -168,6 +168,8 @@ const EXPECTED_DEFINER_EXECUTE: Record<string, string> = {
   lesson_content_errors: "bnl_staff", pin_manifest: "bnl_staff", publish_lesson_version: "bnl_staff", refresh_manifest: "bnl_staff",
   transition_lesson_version: "bnl_staff", unpublish_lesson: "bnl_staff",
   purge_expired: "bnl_job", purge_expired_analytics: "bnl_job",
+  // 0009 (A9-PRIV-01): consent probe for the caller's own household, guardian export, deletion job.
+  household_has_consent: "bnl_device", export_household: "bnl_adult", process_deletion_request: "bnl_job",
   rate_limit_hit: "bnl_adult,bnl_device,bnl_public,bnl_staff",
 };
 

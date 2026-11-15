@@ -19,15 +19,48 @@ export const SESSION_COOKIE = "bnl_admin_session";
 
 const unauthorized = () => new HttpError(401, "unauthorized", "Authentication required");
 
+/** `details.reason` of the 403 every adult API returns while the account must still replace its one-time password. */
+export const PASSWORD_CHANGE_REQUIRED = "password_change_required";
+export const passwordChangeRequired = () =>
+  new HttpError(403, "forbidden", "Password change required before continuing", { reason: PASSWORD_CHANGE_REQUIRED });
+
+/**
+ * Adult endpoints that stay usable while the must-change flag is set (besides POST /api/v1/auth/password, which
+ * opts in explicitly, and logout, which needs no identity). Keyed by "METHOD /path".
+ */
+const ALLOWED_WHILE_PASSWORD_CHANGE_PENDING: ReadonlySet<string> = new Set(["GET /api/v1/admin/me"]);
+
+function requestKey(req: Request): string {
+  let path: string;
+  try {
+    path = new URL(req.url).pathname.replace(/\/+$/, "");
+  } catch {
+    path = "";
+  }
+  return `${req.method.toUpperCase()} ${path}`;
+}
+
+export interface RequireAdultOptions {
+  /** Let an account with a pending forced password change through (only the password-change endpoint). */
+  readonly allowPendingPasswordChange?: boolean;
+}
+
 /** Verifies the adult session cookie value; null when absent/invalid. */
 export async function adultFromSessionToken(deps: AppDeps, token: string | null | undefined): Promise<AdultIdentity | null> {
   if (!token) return null;
   return deps.adultAuth.verifySession(token);
 }
 
-export async function requireAdult(req: Request, c: Ctx): Promise<AdultIdentity> {
+/**
+ * Every adult API goes through here. No/invalid session → 401 (SEC-001). A valid session whose account must
+ * still change its one-time password → 403 forbidden/password_change_required, except on the allow-list.
+ */
+export async function requireAdult(req: Request, c: Ctx, opts: RequireAdultOptions = {}): Promise<AdultIdentity> {
   const identity = await adultFromSessionToken(c.deps, readCookie(req.headers.get("cookie"), SESSION_COOKIE));
   if (!identity) throw unauthorized();
+  if (identity.mustChangePassword && !opts.allowPendingPasswordChange && !ALLOWED_WHILE_PASSWORD_CHANGE_PENDING.has(requestKey(req))) {
+    throw passwordChangeRequired();
+  }
   return identity;
 }
 

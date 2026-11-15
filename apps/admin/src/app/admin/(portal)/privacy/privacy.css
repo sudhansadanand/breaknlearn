@@ -1,0 +1,16 @@
+.privacy-draft { background: #fff3cd; border: 1px solid #b38600; border-radius: 8px; padding: 10px 12px; margin-bottom: 20px; }
+.privacy-notice h3 { margin: 20px 0 6px; font-size: 1.05rem; }
+.privacy-notice ul { margin: 6px 0; padding-left: 22px; }
+.privacy-notice li { margin: 4px 0; }
+.privacy-choices fieldset, .privacy-delete fieldset { border: 0; margin: 0; padding: 0; }
+.privacy-choices legend, .privacy-delete legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+.privacy-option { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding: 12px 0; border-bottom: 1px solid #eee4d2; }
+.privacy-option input[type="checkbox"], .privacy-option input[type="radio"] { width: 22px; height: 22px; margin: 2px 0 0; padding: 0; accent-color: var(--bnl-purple); }
+.privacy-option label { margin: 0; }
+.privacy-option p { margin: 0; grid-column: 2; }
+.privacy-option .state { font-size: 0.9rem; }
+a.privacy-download { display: inline-block; font-weight: 700; border-radius: 999px; padding: 10px 20px; background: var(--bnl-purple); color: #fff; text-decoration: none; }
+a.privacy-download:focus-visible { outline: 3px solid var(--bnl-sun); outline-offset: 2px; }
+.privacy-delete .warn { background: #fde8eb; border: 1px solid var(--bnl-danger); border-radius: 8px; padding: 10px 12px; }
+.privacy-delete button.danger { margin-top: 16px; padding: 10px 20px; }
+.privacy-table-wrap { overflow-x: auto; }

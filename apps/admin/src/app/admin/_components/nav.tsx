@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/imports", label: "School imports" },
   { href: "/admin/lessons", label: "Lessons" },
   { href: "/admin/analytics", label: "Analytics" },
+  { href: "/admin/privacy", label: "Privacy" },
 ] as const;
 
 const isCurrent = (pathname: string, href: string) =>

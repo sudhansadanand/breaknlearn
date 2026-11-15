@@ -9,11 +9,11 @@ plus where the value is stored.
 - [ ] Separate staging project created, holding no real child data.
 - [ ] Auth: public sign-ups off; site and redirect URLs set; email templates reviewed.
 - [ ] `bnl` is not in the exposed API schemas.
-- [ ] Migrations 0001–0008 and the core seeds applied to staging, then production (`DEPLOYMENT_RUNBOOK.md` §2). Verification queries returned 0 rows.
+- [ ] Migrations 0001–0009 and the core seeds applied to staging, then production (`DEPLOYMENT_RUNBOOK.md` §2). Verification queries returned 0 rows.
 - [ ] `bnl_app` password generated and stored. Private bucket `school-syllabi` created (§4).
 
 ## 2. People and access
-- [ ] Owner admin email: ________ (invited through Supabase Auth, no default password).
+- [ ] Owner admin email: admin email provided by owner 2026-11-15, bootstrap with scripts/ops/bootstrap-owner.mjs (`DEPLOYMENT_RUNBOOK.md` §5: one-time password delivered out of band, forced change at first sign-in). Do not write the address here.
 - [ ] Who else gets household (guardian) access: ________.
 - [ ] Who gets staff roles (editor/reviewer/publisher/analyst), if anyone: ________.
 - [ ] Who holds Vercel and Supabase admin access, and how it is protected (2FA).
