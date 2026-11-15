@@ -6,8 +6,9 @@
 // 1. initdb a temporary cluster (scram auth, random passwords) and start it on a free localhost port;
 // 2. create `bnl_test` and apply supabase/migrations/*.sql, supabase/seed/*.sql (core seeds) and
 //    supabase/seed/dev_synthetic.sql (SYNTHETIC test data);
-// 3. create `bnl_fresh_a` / `bnl_fresh_b` with migrations + core seeds, and re-apply the migrations to
-//    `bnl_fresh_b` (migrations must apply cleanly on fresh databases in one cluster and be re-runnable);
+// 3. create `bnl_fresh_a` (migrated FIRST by a non-superuser CREATEROLE login, as on Supabase) and `bnl_fresh_b`
+//    with migrations + core seeds, and re-apply the migrations to both (migrations must apply cleanly on fresh
+//    databases in one cluster, without superuser, and be re-runnable);
 // 4. set a random password for the LOGIN role bnl_app and export
 //      BNL_TEST_DB_URL         postgres://bnl_app:...@127.0.0.1:<port>/bnl_test   (request-path role)
 //      BNL_TEST_ADMIN_URL      postgres://postgres:...@127.0.0.1:<port>/bnl_test  (superuser, test setup only)
@@ -72,6 +73,7 @@ const dir = mkdtempSync(join(tmpdir(), "bnl-pg-"));
 const dataDir = join(dir, "data");
 const superPassword = randomBytes(24).toString("hex");
 const appPassword = randomBytes(24).toString("hex");
+const migratorPassword = randomBytes(24).toString("hex");
 let started = false;
 
 function teardown() {
@@ -111,7 +113,17 @@ async function main() {
   const migrations = sqlFiles(MIGRATIONS_DIR, () => true);
   const coreSeeds = sqlFiles(SEED_DIR, (f) => f !== SYNTHETIC_SEED);
 
-  for (const db of ["bnl_test", "bnl_fresh_a", "bnl_fresh_b"]) {
+  // Supabase-like first: `bnl_fresh_a` is migrated by a NON-superuser CREATEROLE login (like Supabase's `postgres`)
+  // while the cluster has no bnl roles yet, so it creates them and gets PostgreSQL 16+'s ADMIN-only self-grant.
+  psql("postgres", ["-c", `create role supabase_like_migrator login createrole password '${migratorPassword}'`]);
+  psql("postgres", ["-c", "create database bnl_fresh_a owner supabase_like_migrator"]);
+  const migratorEnv = { ...psqlEnv, PGUSER: "supabase_like_migrator", PGPASSWORD: migratorPassword };
+  const applyAsMigrator = (db, file) =>
+    run(join(PG_BIN, "psql"), ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", db, "-1", "-f", file], { env: migratorEnv });
+  for (const f of [...migrations, ...coreSeeds]) applyAsMigrator("bnl_fresh_a", f);
+  for (const f of migrations) applyAsMigrator("bnl_fresh_a", f); // re-run as the non-superuser too
+
+  for (const db of ["bnl_test", "bnl_fresh_b"]) {
     psql("postgres", ["-c", `create database ${db}`]);
     for (const f of [...migrations, ...coreSeeds]) applyFile(db, f);
   }

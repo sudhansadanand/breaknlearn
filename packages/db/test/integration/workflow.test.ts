@@ -185,7 +185,10 @@ describe("migrations", () => {
                 from information_schema.columns where table_schema = 'bnl') as columns,
              (select md5(string_agg(tablename || '.' || policyname || ':' || cmd || ':' || roles::text, ',' order by tablename, policyname))
                 from pg_policies where schemaname = 'bnl') as policies,
-             (select md5(string_agg(p.oid::regprocedure::text || ':' || pg_get_userbyid(p.proowner), ',' order by p.oid::regprocedure::text))
+             -- Owner is bnl_owner (SECURITY DEFINER) or whichever login ran the migrations (superuser or, on
+             -- bnl_fresh_a, a Supabase-like non-superuser), so the login's name is normalised.
+             (select md5(string_agg(p.oid::regprocedure::text || ':' || case when pg_get_userbyid(p.proowner) = 'bnl_owner'
+                       then 'bnl_owner' else 'migration_login' end, ',' order by p.oid::regprocedure::text))
                 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'bnl') as functions,
              (select count(*)::int from bnl.publication_records where unpublished_at is null) as live`;
     return row;
