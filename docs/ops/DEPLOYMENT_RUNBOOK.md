@@ -160,12 +160,20 @@ Server-only values must never be `NEXT_PUBLIC_`.
 | `RETENTION_RAW_TELEMETRY_DAYS`, `RETENTION_AGGREGATE_DAYS` | `90`, `395` **pending owner confirmation** (`PRIVACY.md`) |
 | `HOUSEHOLD_DEFAULT_TZ` | `Asia/Kolkata` |
 | `FEATURE_*` | all `false` at first deploy, except `FEATURE_STUDENT_SW=true`; see §8 |
+| `CRON_SECRET` | ≥ 32 random characters, unique per environment (§7) |
 
 ## 7. Jobs
 
 The jobs are one-shot Node CLIs that print one JSON line, exit 1 on failure and run as `bnl_job` through `bnl_app`.
-Schedule them on a runner that has the repo checked out and `pnpm install` done, with `BNL_JOB_DB_URL` set. Use
-GitHub Actions `schedule` or another scheduler the owner approves. Vercel Cron cannot run them as they are, because they are scripts, not routes.
+They can be scheduled two ways:
+
+- **Vercel Cron (default, used on staging).** `apps/admin/vercel.json` calls `GET /api/v1/internal/jobs/nightly` daily at
+  00:30 UTC. Set `CRON_SECRET` (≥ 32 random characters, unique per environment) in the Vercel environment; Vercel sends
+  it as `Authorization: Bearer …`. Without it the route answers 404. The nightly call aggregates and scores yesterday,
+  then runs the retention purge and the deletion requests, through the app's `bnl_app` pool (`BNL_APP_DB_URL`). An
+  operator can run one day on demand with `?date=YYYY-MM-DD` (aggregate and score only), for example to score "today so far"
+  during testing. The Hobby plan allows one cron a day, and the function is limited to 60 s.
+- **CLI runner.** The scripts below, on a runner that has the repo checked out and `pnpm install` done, with `BNL_JOB_DB_URL` set.
 
 | When (UTC) | Command | Notes |
 |---|---|---|
