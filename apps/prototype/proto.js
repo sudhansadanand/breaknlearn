@@ -14,10 +14,22 @@
     { key: "farm", name: "Animal Farm", icon: "🐴", color: "#4d8a60", obj: "🥕", objs: "carrots", who: "🐴", whos: "horses" }
   ];
 
+  // School demo mode (/demo/child): set by child.html. Fictional school and children; same engine.
+  var DEMO = window.BNL_DEMO || null;
+  var UNIT = DEMO ? {
+    school: "Demo Primary School", teacher: "Ms Anjali", week: "Week 3 of 6",
+    theme: "How we organise ourselves", idea: "Communities create systems to share resources fairly.",
+    concepts: "Function · Responsibility · Perspective", cambridge: "Cambridge Primary Maths · Stage 2: division as sharing and grouping"
+  } : null;
+
   var LEVELS = {
-    starter: { name: "Just starting", detail: "Small numbers, with pictures" },
-    explorer: { name: "Getting it", detail: "Bigger numbers and word problems" }
+    starter: { name: "Just starting", detail: "Small numbers, with pictures", who: "🧒 Child A", kid: "Child A" },
+    explorer: { name: "Getting it", detail: "Bigger numbers and word problems", who: "👧 Child B", kid: "Child B" }
   };
+  if (DEMO) {
+    LEVELS.starter = { name: "Meera · Grade 2", detail: "Just starting: small numbers, with pictures", who: "👧 Meera · Grade 2", kid: "Meera" };
+    LEVELS.explorer = { name: "Kabir · Grade 4", detail: "Getting it: leftovers, money and word problems", who: "👦 Kabir · Grade 4", kid: "Kabir" };
+  }
 
   var state = { world: WORLDS[5], level: "starter", voice: true, screen: "home", parentQuestions: [], missions: [] };
   var timers = [];
@@ -34,7 +46,7 @@
   function on(id, fn) { var b = byId(id); if (b) { b.onclick = fn; } }
   function focusFirst() {
     var f = app.querySelector("[data-first]") || app.querySelector("button,input");
-    if (f) { f.focus(); }
+    if (f) { try { f.focus({ preventScroll: true }); } catch (e) { f.focus(); } }
   }
   function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
@@ -54,6 +66,7 @@
     clearTimers();
     hush();
     state.screen = screen;
+    try { window.scrollTo(0, 0); } catch (e) { /* ignore */ }
     document.documentElement.style.setProperty("--world", state.world.color);
     SCREENS[screen]();
   }
@@ -127,14 +140,14 @@
       var w = WORLDS[i];
       worlds += '<button class="world' + (w === state.world ? " on" : "") + '" data-w="' + i + '"' + (w === state.world ? " data-first" : "") + '><span class="big">' + w.icon + "</span>" + esc(w.name) + "</button>";
     }
-    el('<div class="eyebrow">This week at school</div><h1>Sharing equally (÷)</h1>' +
+    el((UNIT ? unitHeader() : '<div class="eyebrow">This week at school</div><h1>Sharing equally (÷)</h1>') +
       "<p>One concept, every mode: learn it, hear its story, play with it, and practise it together as a family.</p>" +
       '<div class="panel"><h3>1. Pick your world</h3><div class="grid six">' + worlds + "</div></div>" +
       '<div class="panel"><h3>2. Who is playing?</h3><div class="grid two">' +
-      '<button class="lvl' + (state.level === "starter" ? " good" : "") + '" data-l="starter">🧒 Child A · ' + LEVELS.starter.name + '<br><small>' + LEVELS.starter.detail + "</small></button>" +
-      '<button class="lvl' + (state.level === "explorer" ? " good" : "") + '" data-l="explorer">👧 Child B · ' + LEVELS.explorer.name + '<br><small>' + LEVELS.explorer.detail + "</small></button>" +
+      '<button class="lvl' + (state.level === "starter" ? " good" : "") + '" data-l="starter">' + (DEMO ? LEVELS.starter.who : "🧒 Child A · " + LEVELS.starter.name) + '<br><small>' + LEVELS.starter.detail + "</small></button>" +
+      '<button class="lvl' + (state.level === "explorer" ? " good" : "") + '" data-l="explorer">' + (DEMO ? LEVELS.explorer.who : "👧 Child B · " + LEVELS.explorer.name) + '<br><small>' + LEVELS.explorer.detail + "</small></button>" +
       '</div><div class="row"><button id="start" class="primary">Let’s go →</button></div></div>' +
-      '<p class="note">In the real app the level comes from each child’s quiz results, and the concept from what their teacher taught this week.</p>');
+      '<p class="note">' + (DEMO ? "Same concept, pitched to each child: Meera and Kabir are siblings in different grades. Levels come from each child’s own answers; the concept comes from the pack " + UNIT.teacher + " approved this week." : "In the real app the level comes from each child’s quiz results, and the concept from what their teacher taught this week.") + "</p>");
     var ws = app.querySelectorAll(".world");
     for (var j = 0; j < ws.length; j++) { ws[j].onclick = function () { state.world = WORLDS[Number(this.getAttribute("data-w"))]; go("home"); byId("start").focus(); }; }
     var ls = app.querySelectorAll(".lvl");
@@ -153,16 +166,18 @@
       ["match", "🏏", "Family match night", "Everyone plays, cricket style"],
       ["parents", "👪", "For parents", "This week at school + dinner questions"]
     ];
+    if (DEMO) { tiles.splice(4, 0, ["wonder", "🤔", "Big question", "Is equal always fair? There’s no wrong answer"]); }
     var h = "";
     for (var i = 0; i < tiles.length; i++) {
       h += '<button class="tile" data-go="' + tiles[i][0] + '"' + (i === 0 ? " data-first" : "") + '><span class="big">' + tiles[i][1] + "</span>" + tiles[i][2] + "<small>" + tiles[i][3] + "</small></button>";
     }
-    el('<div class="row space"><div><div class="eyebrow">' + esc(w.icon + " " + w.name + " · " + LEVELS[state.level].name) + '</div><h1>Sharing equally (÷)</h1></div><button id="home" class="soft">Change world or player</button></div>' +
+    el('<div class="row space"><div><div class="eyebrow">' + esc(w.icon + " " + w.name + " · " + LEVELS[state.level].name) + '</div><h1>Sharing equally (÷)</h1>' + (UNIT ? unitPills() : "") + '</div><button id="home" class="soft">Change world or player</button></div>' +
       '<div class="grid">' + h + "</div>" +
       '<p class="hint">Use the arrow keys and OK/Enter. Back returns here.</p>');
     var ts = app.querySelectorAll(".tile");
     for (var j = 0; j < ts.length; j++) { ts[j].onclick = function () { go(this.getAttribute("data-go")); }; }
     on("home", function () { go("home"); });
+    if (state.focusTile) { var ft = app.querySelector('[data-go="' + state.focusTile + '"]'); state.focusTile = null; if (ft) { ft.focus(); } }
   };
 
   // ----- Learn -----
@@ -229,6 +244,11 @@
     { art: "➗", title: "Not everyone writes ÷", text: "In many countries children write division with a colon instead, like 12 : 3 = 4. On a calculator or computer you'll often see a slash: 12 / 3." },
     { art: "🛒", title: "Fair shares in the market", text: "Shopkeepers have always needed fair shares: splitting a sack of rice into equal bags, or a bill among friends. Every time, they are dividing." }
   ];
+  if (DEMO) {
+    FACTS.splice(4, 1,
+      { art: "🍛", title: "A kitchen that feeds everyone", text: "At the Golden Temple in Amritsar, the community kitchen, called the langar, serves free meals to tens of thousands of people every day. Everyone sits together in rows and gets the same food. Volunteers organise it so the sharing is fair." },
+      { art: "🛒", title: "Fair shares in the market", text: "Shopkeepers have always needed fair shares: splitting a sack of rice into equal bags, or a bill among friends. Every time, they are dividing." });
+  }
   SCREENS.story = function () {
     var i = 0;
     function show() {
@@ -454,6 +474,7 @@
       { name: "Parent", icon: "🧑", level: "grown" },
       { name: "Grandparent", icon: "🧓", level: "grown" }
     ];
+    if (DEMO) { players[0].name = LEVELS[state.level].kid; players[1].name = "Appa"; players[2].name = "Paati (from Madurai)"; }
     var target = 15, runs = 0, balls = 0, maxBalls = 12, streak = 0, log = [], predicted = null;
     function intro() {
       el(topBar("Family match night") + '<div class="panel"><h2>Family XI vs Team ' + esc(state.world.icon + " Mascot") + "</h2>" +
@@ -532,6 +553,40 @@
     intro();
   };
 
+  // ----- School demo: unit header and the PYP "big question" -----
+  function unitPills() {
+    return '<div class="row" style="margin:4px 0 0"><span class="pill pyp">PYP · ' + esc(UNIT.theme) + '</span><span class="pill pyp">' + esc(UNIT.concepts) + '</span><span class="pill cam">Cambridge Stage 2</span></div>';
+  }
+  function unitHeader() {
+    return '<div class="eyebrow">' + esc(UNIT.school + " · " + UNIT.week + " · approved by " + UNIT.teacher) + "</div><h1>Sharing equally (÷)</h1>" +
+      '<div class="row" style="margin:0 0 6px"><span class="pill pyp">PYP · ' + esc(UNIT.theme) + '</span><span class="pill pyp">Key concepts: ' + esc(UNIT.concepts) + '</span><span class="pill cam">' + esc(UNIT.cambridge) + "</span></div>" +
+      "<p><b>Central idea:</b> " + esc(UNIT.idea) + "</p>";
+  }
+  SCREENS.wonder = function () {
+    var starter = state.level === "starter";
+    var q = starter ?
+      { set: "There are 4 rotis for Meera, her brother and Paati. Paati is very hungry after cooking all morning.", opts: ["Share them exactly equally", "Give Paati a bit more", "Ask everyone how hungry they are"] } :
+      { set: "A class has 25 pencils for 4 groups. One group has a child who broke their arm and finds thin pencils hard to hold.", opts: ["Equal shares, 6 each, and decide about the extra one", "Give that group the thick pencils first", "Let each group say what it needs, then decide together"] };
+    var h = '<div class="options three">';
+    for (var i = 0; i < q.opts.length; i++) { h += '<button class="soft opt"' + (i === 0 ? " data-first" : "") + ">" + esc(q.opts[i]) + "</button>"; }
+    el(topBar("Big question · Is equal always fair?") + '<div class="panel"><div class="eyebrow">Key concept: Perspective · Learner profile: Principled, Caring</div><div class="fact">' + esc(q.set) + "</div><p>What would you do? There’s no wrong answer. Think about why.</p>" + h + '</div><div id="more"></div></div>');
+    wireTop();
+    speak("Big question. Is equal always fair? " + q.set + " What would you do?");
+    var bs = app.querySelectorAll(".opt");
+    for (var j = 0; j < bs.length; j++) {
+      bs[j].onclick = function () {
+        for (var m = 0; m < bs.length; m++) { bs[m].className = "soft opt"; }
+        this.className = "good opt";
+        byId("more").innerHTML = '<p>Great thinking. <b>Equal</b> means everyone gets the same. <b>Fair</b> can mean thinking about what each person needs. Both are ways communities organise sharing.</p>' +
+          "<p><b>Ask at home:</b> when is equal the fairest way? When is it not?</p>" +
+          '<p class="note">Your choice is not marked. It goes into your family’s match night as a “talk about it” question.</p><div class="row"><button id="hub2" class="primary">Back to modes</button></div>';
+        speak("Great thinking. Equal means everyone gets the same. Fair can mean thinking about what each person needs.");
+        on("hub2", function () { go("hub"); });
+        byId("hub2").focus();
+      };
+    }
+  };
+
   // ----- Parents -----
   SCREENS.parents = function () {
     var starter = state.level === "starter";
@@ -541,7 +596,8 @@
       ["Dinner costs ₹480 for 4 of us. How much is each share?", "24 stairs in 3 equal flights: how many stairs in each?", "We need 36 sweets in 6 boxes for Diwali. How many per box?"];
     var added = "";
     for (var i = 0; i < state.parentQuestions.length; i++) { added += "<li>" + esc(state.parentQuestions[i]) + " <em>(in the next match night)</em></li>"; }
-    el(topBar("For parents") + '<div class="card"><div class="eyebrow">This week at school</div><h2>Sharing equally (division)</h2>' +
+    el(topBar("For parents") + '<div class="card"><div class="eyebrow">This week at school' + (UNIT ? " · " + esc(UNIT.school + " · " + UNIT.teacher) : "") + '</div><h2>Sharing equally (division)</h2>' +
+      (UNIT ? '<p><span class="pill pyp">PYP · ' + esc(UNIT.theme) + '</span><span class="pill pyp">' + esc(UNIT.concepts) + '</span><span class="pill cam">' + esc(UNIT.cambridge) + "</span></p><p><b>Central idea of the unit:</b> " + esc(UNIT.idea) + " This week the class explored how we share equally, and when equal is fair.</p>" : "") +
       "<p><b>In plain words:</b> sharing a number of things into equal groups. 12 ÷ 3 = 4 means 12 shared into 3 equal groups gives 4 in each.</p>" +
       "<p><b>Words the teacher uses:</b> share, equal groups, divide, ÷, each.</p>" +
       "<p><b>How it was explained in class:</b> dealing objects one at a time into groups, then checking with multiplication (3 × 4 = 12).</p>" +
@@ -550,7 +606,7 @@
       "<h3>This week’s Try it missions</h3><p>" + (starter ? "Roti share (kitchen), Sock pairs (laundry), Diya rows (festival)." : "Ladoo share with leftovers (kitchen), Best buy (shop), Run rate (cricket).") + " About 10 minutes each, done together." + (doneCount ? " <b>Done so far: " + doneCount + ".</b>" : "") + "</p>" +
       "<h3>Add your own question for match night</h3><div class=\"row\"><input id=\"pq\" class=\"text\" placeholder=\"e.g. We bought 15 mangoes for 3 families. How many each?\"></div>" +
       '<div class="row"><button id="add" class="primary">Add question</button><button id="hub2" class="soft" data-first>Back to modes</button></div>' + (added ? "<ul>" + added + "</ul>" : "") +
-      '<p class="note">Questions are pitched to ' + (starter ? "Child A (just starting)" : "Child B (getting it)") + '. In the real app this card arrives every Monday, built from what the teacher taught.</p></div>');
+      '<p class="note">Questions are pitched to ' + (DEMO ? LEVELS[state.level].kid + " (" + LEVELS[state.level].detail.split(":")[0].toLowerCase() + ")" : starter ? "Child A (just starting)" : "Child B (getting it)") + '. In the real app this card arrives every Monday, built from what the teacher taught.' + (DEMO ? ' <a href="/demo/growth">See this week’s growth story →</a>' : "") + "</p></div>");
     wireTop();
     on("hub2", function () { go("hub"); });
     on("add", function () { var v = byId("pq").value.replace(/^\s+|\s+$/g, ""); if (v) { state.parentQuestions.push(v); go("parents"); } });
@@ -596,5 +652,14 @@
     }
   });
 
-  go("home");
+  // "#family" (TV break + match night) opens the modes with Watch focused, then clears the hash so the link works again.
+  function familyLink() {
+    if (!/family/.test(location.hash)) { return false; }
+    try { window.history.replaceState(null, "", location.pathname); } catch (e) { /* ignore */ }
+    state.focusTile = "watch"; go("hub");
+    return true;
+  }
+  if (DEMO) { window.addEventListener("hashchange", familyLink); }
+  if (DEMO && familyLink()) { /* opened at the modes */ }
+  else { go("home"); }
 })();
