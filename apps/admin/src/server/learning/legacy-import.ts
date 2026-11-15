@@ -17,6 +17,7 @@ import {
 } from "@bnl/student-progress";
 import { z } from "zod";
 import { verifyDeviceBearer, withDevice } from "../authn";
+import { requireDeviceConsent } from "../privacy/gate";
 import type { Sql } from "../db-port";
 import { json, validationFailed, type Ctx } from "../http";
 import { enforceLearningRateLimit, readBoundedJson, requireIdempotencyKey, sha256Hex } from "./common";
@@ -77,8 +78,9 @@ export async function legacyImportHandler(req: Request, c: Ctx): Promise<Respons
 
   const repo = learningRepo();
   const now = c.deps.now();
-  const result = await withDevice(c, claims, (sql) =>
-    idempotent(sql, repo, { scope: "progress.legacy_import", key, ownerId: claims.sub, householdId: claims.hid, requestSha256: requestSha(raw), now }, async () => {
+  const result = await withDevice(c, claims, async (sql) => {
+    await requireDeviceConsent(sql, ["learning_data"]);
+    return idempotent(sql, repo, { scope: "progress.legacy_import", key, ownerId: claims.sub, householdId: claims.hid, requestSha256: requestSha(raw), now }, async () => {
       const learners = new Set(await repo.learnerIdsInHousehold(sql, claims.hid));
       const wanted = [...mapping.values(), ...(historicalLearnerId ? [historicalLearnerId] : [])];
       if (wanted.some((l) => !learners.has(l))) throw new HttpError(403, "forbidden", "Learner is not in your household");
@@ -124,8 +126,8 @@ export async function legacyImportHandler(req: Request, c: Ctx): Promise<Respons
         },
       });
       return { status: 200, body: receipt };
-    }),
-  );
+    });
+  });
   return json(c, result.body, result.status, result.replayed ? { [REPLAY_HEADER]: "true" } : {});
 }
 

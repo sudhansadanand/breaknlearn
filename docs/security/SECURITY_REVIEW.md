@@ -105,7 +105,7 @@ What the suites cover:
 |---|---|---|---|
 | A9-SEC-01 | **Medium** (defence in depth; not reachable through the API) | **Open**: fix in proposal §1, verified | Pairing claim can point at another household's TV at SQL level |
 | A9-OPS-01 | **Medium** (rollout safety) | **Open**: fix in proposal §2 | `FEATURE_PAIRING`, `FEATURE_CATALOG_API` and `FEATURE_SCORES` are not enforced |
-| A9-PRIV-01 | Medium (compliance) | Open, owner decision | Consent is recorded but never checked; there is no export/delete API (OPS-005 partial) |
+| A9-PRIV-01 | Medium (compliance) | **Fixed in `p6/consent-privacy`** (migration 0009); consent wording DRAFT pending owner approval and legal review | Consent is now enforced (403 `consent_required`); guardian export and owner deletion requests with a nightly job |
 | A9-A11Y-01 | Low | Accepted (parity) | TV subjects screen skips a heading level (h1→h3); kept byte-for-byte with the live app |
 
 ### A9-SEC-01: pairing code can be bound to another household's device (SQL level)
@@ -137,11 +137,35 @@ features out in order and to switch them off during an incident. No server code 
 
 ### A9-PRIV-01: consent and data subject requests
 
-- `consent_records` is written by `POST /api/v1/admin/consent`, but no handler checks it.
-- No guardian-facing export or delete exists.
-- The interim operator procedure (`scripts/ops/sql/process-deletion-request.sql`) is tested.
+**Finding (2026-11-14):** `consent_records` was written by `POST /api/v1/admin/consent` but no handler checked it; there
+was no guardian-facing export or deletion (OPS-005 partial).
 
-Design in the proposal §7. Owner decisions are in `docs/ops/PRIVACY.md`.
+**Fix (2026-11-15, branch `p6/consent-privacy`, owner decision of 2026-11-15):**
+- Migration `0009_consent_privacy.sql` (additive, re-runnable): `bnl.household_has_consent(scope)` (SECURITY DEFINER,
+  `bnl_device` only, answers for the caller's own household from the verified token context and takes no household id),
+  `bnl.export_household(id)` (`bnl_adult` only, refuses non-members with 42501, strips token/secret/hash/password columns),
+  `bnl.process_deletion_request(id, n)` (`bnl_job` only; port of the pinned operator procedure), a partial index for the
+  consent probe, and a household-wide consent revoke policy (any owner/guardian may withdraw).
+- Enforcement, always **after** authentication (SEC-001 401s are unchanged), inside the request transaction, before any
+  idempotency replay: pairing approval, progress sync, legacy import, assessment start/answers/finish need `learning_data`;
+  telemetry needs `learning_data` and `telemetry`; creating a school import (upload) needs `school_uploads`.
+- `GET/POST /api/v1/admin/consent` (per scope, additive `scopes`), `GET /api/v1/admin/privacy/export` (owner or guardian,
+  attachment, `no-store`, audited with counts), `GET/POST /api/v1/admin/privacy/deletion-requests` (POST owner only, CSRF,
+  typed confirmation), `scripts/jobs/process-deletion-requests.mjs` (removes `school-syllabi` objects through the storage
+  port, then the rows; idempotent), portal page `/admin/privacy`.
+- Consent wording v1 `bnl-consent-2026-11-v1` in `docs/privacy/CONSENT_TEXT.md`, **DRAFT** pending owner approval; legal
+  review recommended (it references the DPDP Act 2023 without claiming compliance).
+
+**Evidence:** `apps/admin/test/privacy/*.test.ts` (consent API, every enforced endpoint 401 → 403 → allowed, withdrawal and
+idempotent-replay bypass, export/deletion routes), `apps/admin/test/integration/privacy-db.test.ts` (real gate, cross-household,
+export contents, deletion job end to end with local storage, idempotent re-run), `packages/db/test/integration/privacy-functions.test.ts`
+(function grants and semantics), `redteam-schema.test.ts` EXECUTE matrix updated for the three functions.
+
+**Residual:** the TV degrades silently on 403 (no error screen, play continues), but two client behaviours need an A5 follow-up,
+described in `docs/ops/PRIVACY.md` §3.3: telemetry batches refused with `consent_required` stay queued (max 1500 events) and are
+retried with backoff, so activity recorded on the TV while consent was off would upload if consent is given later; a legacy
+import refused with 403 is marked failed and re-planned only at the next app start. Audit log retention is still open
+(`docs/ops/PRIVACY.md` §6).
 
 ## 4. Residual risks (accepted for P7 unless the owner decides otherwise)
 

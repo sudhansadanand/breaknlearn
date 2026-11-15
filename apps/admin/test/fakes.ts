@@ -16,7 +16,7 @@ import {
 import type { HouseholdRole, StaffRole } from "@bnl/contracts";
 import type { DbContext, DbRunner, Sql } from "../src/server/db-port";
 import type { AppDeps } from "../src/server/deps";
-import type { AuditEntry, DeviceRow, PairingCodeRow, ProfileRow, Repos } from "../src/server/repos";
+import type { AuditEntry, ConsentScopeName, DeviceRow, PairingCodeRow, ProfileRow, Repos } from "../src/server/repos";
 
 export const ORIGIN = "http://localhost:3000";
 export const HH_A = "a0000000-0000-4000-8000-00000000000a";
@@ -34,6 +34,7 @@ interface ConsentStored {
   householdId: string;
   userId: string;
   consentVersion: string;
+  scope: ConsentScopeName;
   grantedAt: Date;
   revokedAt: Date | null;
 }
@@ -175,12 +176,21 @@ export function fakeRepos(store: Store): Repos {
     consent: {
       async grant(sql, p) {
         if (!canSee(store, sql, p.householdId)) throw new Error("RLS");
-        store.consent.push({ householdId: p.householdId, userId: p.userId, consentVersion: p.consentVersion, grantedAt: p.at, revokedAt: null });
+        store.consent.push({ householdId: p.householdId, userId: p.userId, consentVersion: p.consentVersion, scope: p.scope ?? "learning_data", grantedAt: p.at, revokedAt: null });
       },
-      async revoke(_sql, p) {
-        const rows = store.consent.filter((c) => c.householdId === p.householdId && c.userId === p.userId && c.consentVersion === p.consentVersion && c.revokedAt === null);
+      async revoke(sql, p) {
+        if (!canSee(store, sql, p.householdId)) return 0;
+        const rows = store.consent.filter((c) =>
+          c.householdId === p.householdId && c.revokedAt === null && (p.scope ? c.scope === p.scope : c.userId === p.userId && c.consentVersion === p.consentVersion));
         for (const r of rows) r.revokedAt = p.at;
         return rows.length;
+      },
+      async active(sql, householdId) {
+        if (!canSee(store, sql, householdId)) return [];
+        return store.consent
+          .filter((c) => c.householdId === householdId && c.revokedAt === null)
+          .sort((a, b) => b.grantedAt.getTime() - a.grantedAt.getTime())
+          .map((c) => ({ scope: c.scope, consentVersion: c.consentVersion, guardianUserId: c.userId, grantedAt: c.grantedAt }));
       },
     },
     audit: {
